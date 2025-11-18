@@ -1,18 +1,16 @@
 import streamlit as st
-from st_audiorec import st_audiorec
+from audio_recorder_streamlit import audio_recorder # <-- NEW LIBRARY
 import ai_engine
 import database
 import letter_format
 import mailer
 import os
 
-# --- ROBUST IMPORT: Handle Cloud vs Local ---
+# --- ROBUST IMPORT ---
 try:
     import recorder
     local_rec_available = True
 except ImportError:
-    # If we are on the cloud, 'recorder' (and sounddevice) won't exist.
-    # We just disable that feature gracefully.
     local_rec_available = False
 
 st.set_page_config(page_title="VerbaPost", page_icon="📮")
@@ -39,7 +37,6 @@ with st.container():
 st.divider()
 st.subheader("🎙️ Dictate Message")
 
-# Logic: If we are local, show both options. If on cloud, force Browser Mode.
 if local_rec_available:
     recording_mode = st.radio("Microphone Source:", 
                               ["🖥️ Local Mac Microphone (Dev Mode)", "🌐 Browser Microphone (Deploy Mode)"])
@@ -57,14 +54,23 @@ if recording_mode == "🖥️ Local Mac Microphone (Dev Mode)":
             st.session_state.audio_path = path
         st.success("Recording Complete! Click Generate below.")
 
-# --- MODE 2: BROWSER ---
+# --- MODE 2: BROWSER (UPDATED) ---
 else:
-    st.info("Uses the Browser. Required for Cloud.")
-    wav_audio_data = st_audiorec()
-    if wav_audio_data is not None and len(wav_audio_data) > 1000:
+    st.info("Click the microphone icon below to start/stop recording.")
+    
+    # NEW RECORDER WIDGET
+    # It saves directly to 'audio_bytes' when you stop recording
+    audio_bytes = audio_recorder(
+        text="",
+        recording_color="#e8b62c",
+        neutral_color="#6aa36f",
+        icon_size="60px",
+    )
+    
+    if audio_bytes:
         path = "temp_browser_recording.wav"
         with open(path, "wb") as f:
-            f.write(wav_audio_data)
+            f.write(audio_bytes)
         st.session_state.audio_path = path
 
 # --- GENERATE SECTION ---
