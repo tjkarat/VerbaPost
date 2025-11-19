@@ -1,6 +1,11 @@
 import streamlit as st
 
 def show_splash():
+    # --- PRICING CONFIGURATION ---
+    PRICE_STANDARD = "$2.99"
+    PRICE_HEIRLOOM = "$5.99"
+    PRICE_CIVIC = "$6.99"
+
     st.title("VerbaPost 📮")
     st.subheader("The Authenticity Engine.")
     st.markdown(
@@ -18,21 +23,21 @@ def show_splash():
     
     with c1:
         st.markdown("### ⚡ Standard")
-        st.caption("**.50 / letter**")
+        st.caption(f"**{PRICE_STANDARD} / letter**")
         st.write("API Fulfillment")
         st.write("Window Envelope")
         st.write("Mailed in 24hrs")
 
     with c2:
         st.markdown("### 🏺 Heirloom")
-        st.caption("**.00 / letter**")
+        st.caption(f"**{PRICE_HEIRLOOM} / letter**")
         st.write("Hand-stamped")
         st.write("Premium Paper")
-        st.write("Mailed from Nashville, TN") # <--- FIXED
+        st.write("Mailed from Nashville, TN")
 
     with c3:
         st.markdown("### 🏛️ Civic")
-        st.caption("**.00 / blast**")
+        st.caption(f"**{PRICE_CIVIC} / blast**")
         st.write("Mail your Senators")
         st.write("Auto-lookup")
         st.write("(Coming Soon)")
