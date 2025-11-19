@@ -18,21 +18,21 @@ def show_splash():
     
     with c1:
         st.markdown("### ⚡ Standard")
-        st.caption("**$2.50 / letter**")  # <--- FIXED PRICE
+        st.caption("**.50 / letter**")
         st.write("API Fulfillment")
         st.write("Window Envelope")
         st.write("Mailed in 24hrs")
 
     with c2:
         st.markdown("### 🏺 Heirloom")
-        st.caption("**$5.00 / letter**")  # <--- FIXED PRICE
+        st.caption("**.00 / letter**")
         st.write("Hand-stamped")
         st.write("Premium Paper")
-        st.write("You print & mail")
+        st.write("Mailed from Nashville, TN") # <--- FIXED
 
     with c3:
         st.markdown("### 🏛️ Civic")
-        st.caption("**$6.00 / blast**")  # <--- FIXED PRICE
+        st.caption("**.00 / blast**")
         st.write("Mail your Senators")
         st.write("Auto-lookup")
         st.write("(Coming Soon)")
