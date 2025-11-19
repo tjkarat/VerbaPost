@@ -15,7 +15,7 @@ import payment_engine
 # --- CONFIGURATION ---
 MAX_BYTES_THRESHOLD = 35 * 1024 * 1024 
 
-# --- PRICING ENGINE (The Source of Truth) ---
+# --- PRICING ENGINE ---
 COST_STANDARD = 2.99
 COST_HEIRLOOM = 5.99
 COST_CIVIC = 6.99
@@ -78,7 +78,6 @@ def show_main_app():
     c_set, c_sig = st.columns(2)
     with c_set:
         st.subheader("Settings")
-        # Dynamic Labels based on Constants
         service_tier = st.radio("Service Level:", 
             [
                 f"⚡ Standard (${COST_STANDARD})", 
@@ -180,7 +179,6 @@ def show_main_app():
         st.divider()
         st.subheader("💰 Checkout")
 
-        # CALCULATE PRICE (Updated Logic)
         if is_heirloom:
             base_price = COST_HEIRLOOM
         elif is_civic:
@@ -215,15 +213,27 @@ def show_main_app():
                 full_recipient = f"{to_name}\n{to_street}\n{to_city}, {to_state} {to_zip}"
                 full_return = f"{from_name}\n{from_street}\n{from_city}, {from_state} {from_zip}" if from_name else ""
 
+                # --- SAVE TO DATABASE ---
+                if not os.path.exists("verbapost.db"): 
+                    database.init_db()
+                
+                sender_name = from_name if from_name else "Guest"
+                database.create_letter(st.session_state.transcribed_text, sender_name)
+                st.write("✅ Saved to Database")
+
+                # --- HANDLE SIGNATURE ---
                 sig_path = None
                 if canvas_result.image_data is not None:
                     img = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
                     sig_path = "temp_signature.png"
                     img.save(sig_path)
 
+                # --- CREATE PDF ---
                 pdf_path = letter_format.create_pdf(
                     st.session_state.transcribed_text, full_recipient, full_return, is_heirloom, "final_letter.pdf", sig_path
                 )
+                
+                st.write("✅ PDF Generated")
                 
                 st.write("✅ Done!")
 
