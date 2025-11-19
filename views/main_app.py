@@ -1,5 +1,4 @@
 import streamlit as st
-from audio_recorder_streamlit import audio_recorder
 from streamlit_drawable_canvas import st_canvas
 import os
 from PIL import Image
@@ -80,47 +79,29 @@ def show_main_app():
         )
 
     # ==================================================
-    #  STATE 1: RECORDING
+    #  STATE 1: RECORDING (NATIVE WIDGET)
     # ==================================================
     if st.session_state.app_mode == "recording":
         st.divider()
         st.subheader("🎙️ Dictate")
         
-        st.warning("⏱️ 3 Minute Limit ($1.00 Overage Fee applies after)")
-
-        # Visual Instructions
-        st.markdown("""
-        <div style="text-align:center; margin-bottom:20px;">
-            <h3 style="color:#28a745;">👇 Tap GREEN to Start</h3>
-            <h3 style="color:#dc3545;">👇 Tap RED to Stop</h3>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Centering Columns
-        c1, c2, c3 = st.columns([1, 1, 1])
+        st.warning("⏱️ **3 Minute Limit** ($1.00 Overage Fee applies after)")
         
-        with c2:
-            # RECORDER SETTINGS
-            audio_bytes = audio_recorder(
-                text="",
-                recording_color="#dc3545", # Bright RED (Stop)
-                neutral_color="#28a745",   # Bright GREEN (Start)
-                icon_size="100px",         # <--- RESIZED TO 100px
-                pause_threshold=300.0,     # 5 Minutes (Prevents auto-stop)
-            )
+        # NATIVE RECORDER - STABLE
+        audio_value = st.audio_input("Tap the Microphone Icon to start")
 
-        if audio_bytes:
-            file_size = len(audio_bytes)
+        if audio_value:
+            file_size = audio_value.getbuffer().nbytes
             
-            # Processing Overlay
+            # PROCESSING OVERLAY
             with st.status("⏳ Uploading Audio...", expanded=True) as status:
                 path = "temp_browser_recording.wav"
                 with open(path, "wb") as f:
-                    f.write(audio_bytes)
+                    f.write(audio_value.getvalue())
                 st.session_state.audio_path = path
                 status.update(label="✅ Upload Complete! Transcribing...", state="complete")
 
-            # Size Check
+            # CHECK SIZE
             if file_size > MAX_BYTES_THRESHOLD:
                 st.error(f"⚠️ Long Recording ({round(file_size/(1024*1024),1)} MB).")
                 if st.button("💳 Agree to +$1.00 & Continue"):
@@ -130,6 +111,7 @@ def show_main_app():
                 if st.button("🗑️ Delete & Retry"):
                     reset_app()
             else:
+                # Auto-advance to transcription
                 st.session_state.app_mode = "transcribing"
                 st.rerun()
 
@@ -206,8 +188,8 @@ def show_main_app():
             )
             
             if not is_heirloom:
-                st.write("🚀 Sending to API...")
-                # mailer.send_letter(pdf_path) # Uncomment for live
+                # mailer.send_letter(pdf_path) # Uncomment when ready
+                pass
             
             st.write("✅ Done!")
 
