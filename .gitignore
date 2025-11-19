@@ -1,3 +1,4 @@
 venv/
 verbapost.db
 *.wav
+.streamlit/secrets.toml
