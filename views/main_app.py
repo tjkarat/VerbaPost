@@ -13,8 +13,6 @@ import mailer
 import zipcodes
 
 # --- CONFIGURATION ---
-# Approx 3 minutes of WAV audio at standard web quality is roughly 10-15MB.
-# We set the threshold at 10MB. If it's bigger, we assume > 3 mins.
 MAX_BYTES_THRESHOLD = 10 * 1024 * 1024 
 
 def validate_zip(zipcode, state):
@@ -28,7 +26,7 @@ def reset_app():
     st.session_state.audio_path = None
     st.session_state.transcribed_text = ""
     st.session_state.app_mode = "recording"
-    st.session_state.overage_agreed = False # Reset payment agreement
+    st.session_state.overage_agreed = False
     st.rerun()
 
 def show_main_app():
@@ -82,69 +80,64 @@ def show_main_app():
         )
 
     # ==================================================
-    #  STATE 1: RECORDING (With Warnings & Overage Logic)
+    #  STATE 1: RECORDING
     # ==================================================
     if st.session_state.app_mode == "recording":
         st.divider()
         st.subheader("🎙️ Dictate")
         
-        # EXPLICIT WARNING BANNER
-        st.warning("⏱️ **LIMIT: 3 MINUTES.** Recordings longer than 3 mins will incur a +$1.00 transcription fee.")
+        st.warning("⏱️ 3 Minute Limit ($1.00 Overage Fee applies after)")
 
-        # INSTRUCTIONS
+        # Visual Instructions
         st.markdown("""
-        <div style="text-align:center; margin-bottom:10px;">
-            <h3>🔴 Tap to Record | ⬛ Tap to Stop</h3>
-            <p style="font-size:12px; color:grey;">Please wait a moment after stopping for upload.</p>
+        <div style="text-align:center; margin-bottom:20px;">
+            <h3 style="color:#28a745;">👇 Tap GREEN to Start</h3>
+            <h3 style="color:#dc3545;">👇 Tap RED to Stop</h3>
         </div>
         """, unsafe_allow_html=True)
 
-        # RECORDER
-        c_left, c_center, c_right = st.columns([1,1,1])
-        with c_center:
+        # Centering Columns
+        c1, c2, c3 = st.columns([1, 1, 1])
+        
+        with c2:
+            # RECORDER SETTINGS
             audio_bytes = audio_recorder(
                 text="",
-                recording_color="#ff0000",
-                neutral_color="#333333",
-                icon_size="100px",
-                pause_threshold=60.0
+                recording_color="#dc3545", # Bright RED (Stop)
+                neutral_color="#28a745",   # Bright GREEN (Start)
+                icon_size="100px",         # <--- RESIZED TO 100px
+                pause_threshold=300.0,     # 5 Minutes (Prevents auto-stop)
             )
 
         if audio_bytes:
             file_size = len(audio_bytes)
             
-            # PROCESSING FEEDBACK
-            with st.status("🚀 Uploading audio...", expanded=True) as status:
+            # Processing Overlay
+            with st.status("⏳ Uploading Audio...", expanded=True) as status:
                 path = "temp_browser_recording.wav"
                 with open(path, "wb") as f:
                     f.write(audio_bytes)
                 st.session_state.audio_path = path
-                status.update(label="✅ Upload Complete!", state="complete")
+                status.update(label="✅ Upload Complete! Transcribing...", state="complete")
 
-            # --- THE PAYMENT GATE ---
+            # Size Check
             if file_size > MAX_BYTES_THRESHOLD:
-                st.error(f"⚠️ Long Recording Detected ({round(file_size/(1024*1024),1)} MB).")
-                st.markdown("Your recording exceeds the 3-minute standard limit.")
-                
-                if st.button("💳 Agree to +$1.00 Charge & Transcribe"):
+                st.error(f"⚠️ Long Recording ({round(file_size/(1024*1024),1)} MB).")
+                if st.button("💳 Agree to +$1.00 & Continue"):
                     st.session_state.overage_agreed = True
-                    st.session_state.app_mode = "transcribing" # Move to next step
+                    st.session_state.app_mode = "transcribing"
                     st.rerun()
-                
                 if st.button("🗑️ Delete & Retry"):
                     reset_app()
-            
-            # --- NORMAL FLOW ---
             else:
                 st.session_state.app_mode = "transcribing"
                 st.rerun()
 
     # ==================================================
-    #  STATE 1.5: TRANSCRIBING (Automatic)
+    #  STATE 1.5: TRANSCRIBING (Auto)
     # ==================================================
     elif st.session_state.app_mode == "transcribing":
-        st.info("🧠 AI is listening to your letter...")
-        
+        st.info("🧠 AI is listening...")
         try:
             text = ai_engine.transcribe_audio(st.session_state.audio_path)
             st.session_state.transcribed_text = text
@@ -152,26 +145,24 @@ def show_main_app():
             st.rerun()
         except Exception as e:
             st.error(f"Transcription Error: {e}")
-            if st.button("Try Again"):
-                reset_app()
+            if st.button("Try Again"): reset_app()
 
     # ==================================================
     #  STATE 2: EDITING
     # ==================================================
     elif st.session_state.app_mode == "editing":
         st.divider()
-        st.subheader("📝 Review & Edit")
+        st.subheader("📝 Review")
         
         st.audio(st.session_state.audio_path)
         
-        # Show Overage Badge if applicable
         if st.session_state.overage_agreed:
             st.caption("💲 Overage Fee Applied: +$1.00")
 
         edited_text = st.text_area(
-            "Make changes below:", 
+            "Edit Text:", 
             value=st.session_state.transcribed_text, 
-            height=250
+            height=300
         )
         
         c_ai, c_reset = st.columns([1, 3])
@@ -181,11 +172,10 @@ def show_main_app():
                 st.session_state.transcribed_text = polished
                 st.rerun()
         with c_reset:
-            if st.button("🗑️ Trash & Re-Record"):
+            if st.button("🗑️ Trash & Retry"):
                 reset_app()
 
         st.markdown("---")
-        
         if st.button("🚀 Approve & Generate PDF", type="primary", use_container_width=True):
             st.session_state.transcribed_text = edited_text
             st.session_state.app_mode = "finalizing"
@@ -216,16 +206,13 @@ def show_main_app():
             )
             
             if not is_heirloom:
-                # In Day 3, we will add the Stripe Charge logic here
-                if st.session_state.overage_agreed:
-                    st.write("💲 Charging Overage Fee...")
                 st.write("🚀 Sending to API...")
-                mailer.send_letter(pdf_path)
+                # mailer.send_letter(pdf_path) # Uncomment for live
             
             st.write("✅ Done!")
 
         st.balloons()
-        st.success("Letter Generated Successfully!")
+        st.success("Letter Generated!")
         
         safe_name = "".join(x for x in to_name if x.isalnum())
         unique_name = f"Letter_{safe_name}_{datetime.now().strftime('%H%M')}.pdf"
