@@ -13,9 +13,10 @@ import mailer
 import zipcodes
 
 # --- CONFIGURATION ---
-MAX_RECORDING_TIME = 180
-ENERGY_THRESHOLD = 400
-PAUSE_THRESHOLD = 60.0
+# 3 Minutes * 60 Seconds = 180 Seconds.
+# Approx 1MB per minute for WAV. 3 Minutes ~= 3-4MB.
+# We set a safe threshold of 5MB before triggering the "Overage" warning.
+MAX_BYTES_THRESHOLD = 5 * 1024 * 1024 
 
 def validate_zip(zipcode, state):
     if not zipcodes.is_real(zipcode): return False, "Invalid Zip Code"
@@ -30,11 +31,7 @@ def reset_recording_state():
     st.rerun()
 
 def show_main_app():
-    """
-    The Core Application Logic.
-    """
-    # --- 0. INIT SESSION STATE (The Fix) ---
-    # This ensures the variables exist before we try to use them
+    # --- 0. INIT SESSION STATE ---
     if "audio_path" not in st.session_state:
         st.session_state.audio_path = None
     if "transcribed_text" not in st.session_state:
@@ -81,27 +78,53 @@ def show_main_app():
             height=100, width=200, drawing_mode="freedraw", key="sig"
         )
 
-    # --- 3. RECORDING ---
+    # --- 3. RECORDING (Overhauled) ---
     st.divider()
     st.subheader("🎙️ Dictate")
     
+    # Explicit Warnings/Instructions
+    st.markdown("""
+    <div style="background-color: #fff3cd; padding: 10px; border-radius: 5px; border: 1px solid #ffeeba; color: #856404;">
+        <strong>⏱️ Time Limit:</strong> 3 Minutes included.<br>
+        <em>Recordings over 3 minutes will incur an extra $1.00 transcription fee.</em>
+    </div>
+    <br>
+    """, unsafe_allow_html=True)
+
+    # Visual Cues
+    st.caption("Tap icon to START. Tap again to STOP. Wait for 'Processing'.")
+
+    # The Massive Recorder
     audio_bytes = audio_recorder(
         text="",
-        recording_color="#ff4b4b",
-        neutral_color="#6aa36f",
-        icon_size="80px",
-        pause_threshold=PAUSE_THRESHOLD, 
-        energy_threshold=ENERGY_THRESHOLD
+        recording_color="#ff0000", # Bright RED for active recording
+        neutral_color="#333333",   # Dark Grey for idle
+        icon_size="120px",         # Huge button
+        pause_threshold=60.0       # Don't stop automatically
     )
 
+    # --- PROCESSING LOGIC ---
     if audio_bytes:
-        if len(audio_bytes) > 2000: 
+        # 1. Check File Size (Overage Logic)
+        file_size = len(audio_bytes)
+        
+        # 2. Processing Indicator
+        with st.spinner(f"Processing {file_size} bytes of audio..."):
             path = "temp_browser_recording.wav"
             with open(path, "wb") as f:
                 f.write(audio_bytes)
             st.session_state.audio_path = path
-            st.success(f"✅ Audio Captured! Ready to Transcribe.")
             
+        # 3. Feedback to User
+        if file_size > MAX_BYTES_THRESHOLD:
+            st.warning("⚠️ **Long Letter Detected:** This recording is over 3 minutes. An extra charge will apply at checkout.")
+            st.success("✅ Audio Captured (Long). Ready to Transcribe.")
+        elif file_size > 2000:
+            st.success("✅ Audio Captured. Ready to Transcribe.")
+        else:
+            st.error("❌ Recording too short. Please tap the button firmly and speak clearly.")
+            st.session_state.audio_path = None # Reset
+
     # --- 4. GENERATE & SEND ---
     if st.session_state.audio_path and os.path.exists(st.session_state.audio_path):
         
@@ -135,9 +158,10 @@ def show_main_app():
                 st.text_area("Final Text:", value=text_content)
                 
                 if not is_heirloom:
+                    # In production, check payment status here first!
                     mailer.send_letter(pdf_path)
 
-                # Unique Filename logic
+                # Unique Filename
                 safe_name = "".join(x for x in to_name if x.isalnum())
                 unique_name = f"Letter_{safe_name}_{datetime.now().strftime('%H%M')}.pdf"
 
