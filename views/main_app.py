@@ -13,26 +13,18 @@ import mailer
 import zipcodes
 
 # --- CONFIGURATION ---
-MAX_RECORDING_TIME = 180  # 3 minutes in seconds
-ENERGY_THRESHOLD = 400    # Audio sensitivity
-PAUSE_THRESHOLD = 60.0    # Seconds of silence before auto-stop
+MAX_RECORDING_TIME = 180
+ENERGY_THRESHOLD = 400
+PAUSE_THRESHOLD = 60.0
 
 def validate_zip(zipcode, state):
-    """
-    Validates that a US Zip code exists and matches the provided State.
-    Returns: (bool, message)
-    """
-    if not zipcodes.is_real(zipcode): 
-        return False, "Invalid Zip Code"
-    
+    if not zipcodes.is_real(zipcode): return False, "Invalid Zip Code"
     details = zipcodes.matching(zipcode)
-    # Check if the state matches (case insensitive)
     if details and details[0]['state'] != state.upper():
          return False, f"Zip is in {details[0]['state']}, not {state}"
     return True, "Valid"
 
 def reset_recording_state():
-    """Clears audio data to allow a fresh take."""
     st.session_state.audio_path = None
     st.session_state.transcribed_text = ""
     st.rerun()
@@ -40,11 +32,13 @@ def reset_recording_state():
 def show_main_app():
     """
     The Core Application Logic.
-    1. Address Input
-    2. Signature Capture
-    3. Audio Recording
-    4. Generation & Sending
     """
+    # --- 0. INIT SESSION STATE (The Fix) ---
+    # This ensures the variables exist before we try to use them
+    if "audio_path" not in st.session_state:
+        st.session_state.audio_path = None
+    if "transcribed_text" not in st.session_state:
+        st.session_state.transcribed_text = ""
     
     # --- 1. ADDRESSING SECTION ---
     st.subheader("1. Addressing")
@@ -66,10 +60,9 @@ def show_main_app():
         from_state = c3.text_input("Your State", max_chars=2)
         from_zip = c4.text_input("Your Zip", max_chars=5)
 
-    # Validation Gate: Prevent progress until address is valid
     if not (to_name and to_street and to_city and to_state and to_zip):
         st.info("👇 Fill out the **Recipient** tab to unlock the tools.")
-        return # Stop rendering the rest of the page
+        return
 
     # --- 2. SETTINGS & SIGNATURE ---
     st.divider()
@@ -77,7 +70,6 @@ def show_main_app():
     
     with c_set:
         st.subheader("Settings")
-        # Tier Selection (Including the future Civic tier)
         service_tier = st.radio("Tier:", ["⚡ Standard ($2.50)", "🏺 Heirloom ($5.00)", "🏛️ Civic ($6.00)"])
         is_heirloom = "Heirloom" in service_tier
 
@@ -89,12 +81,10 @@ def show_main_app():
             height=100, width=200, drawing_mode="freedraw", key="sig"
         )
 
-    # --- 3. RECORDING (With 3-Minute Limit Logic) ---
+    # --- 3. RECORDING ---
     st.divider()
     st.subheader("🎙️ Dictate")
     
-    # Note to developer: The audio_recorder widget handles the recording buffer.
-    # We rely on the user to stop, but we can check file length post-capture.
     audio_bytes = audio_recorder(
         text="",
         recording_color="#ff4b4b",
@@ -105,19 +95,7 @@ def show_main_app():
     )
 
     if audio_bytes:
-        # Calculate approximate duration based on bytes (Mono, 16bit, 44.1kHz)
-        # Byte rate ~= 88kb/s. 3 mins ~= 15MB approx (wav is heavy).
-        # Simple check: 3 mins of WAV is roughly 31 MB. 
-        # Let's use a safe byte limit check.
-        # If file > 35MB, trigger upsell.
-        
-        file_size_mb = len(audio_bytes) / (1024 * 1024)
-        
-        if file_size_mb > 35: 
-            st.warning("⚠️ Recording exceeds 3 minutes. Please switch to the 'Memoir' Plan to send longer letters.")
-            # Ideally, we would trim the audio here or block generation.
-        
-        elif len(audio_bytes) > 2000: 
+        if len(audio_bytes) > 2000: 
             path = "temp_browser_recording.wav"
             with open(path, "wb") as f:
                 f.write(audio_bytes)
@@ -157,8 +135,14 @@ def show_main_app():
                 st.text_area("Final Text:", value=text_content)
                 
                 if not is_heirloom:
-                    # In production, check payment status here first!
                     mailer.send_letter(pdf_path)
+
+                # Unique Filename logic
+                safe_name = "".join(x for x in to_name if x.isalnum())
+                unique_name = f"Letter_{safe_name}_{datetime.now().strftime('%H%M')}.pdf"
+
+                with open(pdf_path, "rb") as pdf_file:
+                    st.download_button("📄 Download PDF", pdf_file, unique_name, "application/pdf", use_container_width=True)
 
                 if st.button("Start Over"):
                     reset_recording_state()
