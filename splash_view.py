@@ -1,11 +1,10 @@
-cat <<EOF > splash_view.py
 import streamlit as st
 
 def show_splash():
     # --- CONFIG ---
-    P_STANDARD = "$2.99"
-    P_HEIRLOOM = "$5.99"
-    P_CIVIC = "$6.99"
+    P_STANDARD = ".99"
+    P_HEIRLOOM = ".99"
+    P_CIVIC = ".99"
 
     # --- HERO ---
     st.title("VerbaPost 📮")
@@ -64,4 +63,3 @@ def show_splash():
             st.rerun()
 
     st.markdown("<div style='text-align: center'><a href='#'>Already have an account? Log In</a></div>", unsafe_allow_html=True)
-EOF
