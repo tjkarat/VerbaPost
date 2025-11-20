@@ -1,21 +1,10 @@
 import streamlit as st
 
-# Version 2.0 - Force Pricing Update
 def show_splash():
-    # --- CONFIG ---
-    P_STANDARD = ".99"
-    P_HEIRLOOM = ".99"
-    P_CIVIC = ".99"
-
     # --- HERO ---
     st.title("VerbaPost 📮")
-    
-    st.markdown(
-        """
-        ### Texts are trivial. Emails are ignored.
-        # Real letters get read.
-        """
-    )
+    st.subheader("The Authenticity Engine.")
+    st.markdown("##### Texts are trivial. Emails are ignored. Real letters get read.")
     
     st.divider()
 
@@ -25,33 +14,42 @@ def show_splash():
     
     with step1:
         st.markdown("### 🎙️ 1. Dictate")
-        st.write("Tap the mic and speak your mind. Our AI transcribes and polishes your message.")
-    
+        st.write("Tap the mic and speak. AI handles the typing.")
     with step2:
         st.markdown("### ✍️ 2. Sign")
-        st.write("Review the text, sign your name on the screen, and choose your style.")
-    
+        st.write("Sign your name on screen.")
     with step3:
         st.markdown("### 📮 3. We Mail")
-        st.write("We print, fold, stamp, and mail a physical letter to your recipient.")
+        st.write("We print, stamp, and mail it for you.")
 
     st.divider()
 
-    # --- PRICING TIERS ---
+    # --- PRICING TIERS (The Fix: Using Metrics) ---
     st.subheader("Simple Pricing")
+    
+    # Custom CSS to center metrics
+    st.markdown("""
+    <style>
+    [data-testid="stMetricValue"] {
+        font-size: 2.5rem !important;
+        color: #E63946;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     c1, c2, c3 = st.columns(3)
     
     with c1:
-        st.info(f"**Standard**\n\n# {P_STANDARD}")
-        st.caption("API Fulfillment • Window Envelope • Mailed via Lob")
+        st.metric(label="⚡ Standard", value="$2.99", help="API Fulfillment • Window Envelope")
+        st.caption("Mailed in 24hrs via automated center.")
 
     with c2:
-        st.success(f"**Heirloom**\n\n# {P_HEIRLOOM}")
-        st.caption("Hand-Stamped • Premium Paper • Mailed from Nashville, TN")
+        st.metric(label="🏺 Heirloom", value="$5.99", help="Hand-Stamped • Premium Paper")
+        st.caption("Hand-prepared & mailed from Nashville, TN.")
 
     with c3:
-        st.warning(f"**Civic Blast**\n\n# {P_CIVIC}")
-        st.caption("Activism Mode • Auto-Find Reps • Mails Senate + House")
+        st.metric(label="🏛️ Civic Blast", value="$6.99", help="Mails 2 Senators + 1 Rep")
+        st.caption("Activism Mode. Auto-finds your reps.")
 
     st.divider()
 
@@ -62,4 +60,4 @@ def show_splash():
             st.session_state.current_view = "main_app"
             st.rerun()
 
-    st.markdown("<div style='text-align: center'><a href='#'>Already have an account? Log In</a></div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; margin-top: 20px;'><a href='#'>Log In</a></div>", unsafe_allow_html=True)

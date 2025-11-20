@@ -45,4 +45,5 @@ elif st.session_state.current_view == "main_app":
             st.rerun()
         st.caption("VerbaPost v0.9 (Alpha)")
         
-    show_main_app()
+    show_main_app()# Force Reload
+# Force Reload2
