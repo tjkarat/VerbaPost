@@ -1,6 +1,5 @@
 import streamlit as st
 
-# Version 3.0 - Force HTML Layout
 def show_splash():
     # --- HERO ---
     st.title("VerbaPost 📮")
@@ -24,42 +23,70 @@ def show_splash():
 
     st.divider()
 
-    # --- PRICING TIERS (HTML GRID) ---
+    # --- PRICING TIERS (HTML GRID FIX) ---
+    # We use &#36; code for Dollar Sign to prevent Markdown errors
     st.subheader("Simple Pricing")
     
     html_pricing = """
-    <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-        
-        <div style="flex: 1; min-width: 200px; background: #f0f2f6; padding: 15px; border-radius: 10px; text-align: center;">
-            <h3 style="margin:0;">⚡ Standard</h3>
-            <h2 style="color: #E63946; font-size: 36px; margin: 0;">$2.99</h2>
-            <p style="font-size: 14px; color: #555;">
-                API Fulfillment<br>
-                Window Envelope<br>
-                Mailed in 24hrs
-            </p>
+    <style>
+        .price-card {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #ddd;
+            height: 100%; /* Force equal height */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .price-tag {
+            color: #E63946;
+            font-size: 32px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .price-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .price-desc {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.4;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+    </style>
+
+    <div class="grid-container">
+        <div class="price-card">
+            <div>
+                <div class="price-title">⚡ Standard</div>
+                <div class="price-tag">&#36;2.99</div>
+                <div class="price-desc">API Fulfillment<br>Window Envelope<br>Mailed in 24hrs</div>
+            </div>
         </div>
 
-        <div style="flex: 1; min-width: 200px; background: #e8fdf5; padding: 15px; border-radius: 10px; text-align: center; border: 2px solid #4CAF50;">
-            <h3 style="margin:0;">🏺 Heirloom</h3>
-            <h2 style="color: #E63946; font-size: 36px; margin: 0;">$5.99</h2>
-            <p style="font-size: 14px; color: #555;">
-                Hand-Stamped<br>
-                Premium Paper<br>
-                Mailed from Nashville, TN
-            </p>
+        <div class="price-card" style="border: 2px solid #4CAF50; background-color: #f0fff4;">
+            <div>
+                <div class="price-title">🏺 Heirloom</div>
+                <div class="price-tag">&#36;5.99</div>
+                <div class="price-desc">Hand-Stamped<br>Premium Paper<br>Mailed from Nashville</div>
+            </div>
         </div>
 
-        <div style="flex: 1; min-width: 200px; background: #fff8e1; padding: 15px; border-radius: 10px; text-align: center;">
-            <h3 style="margin:0;">🏛️ Civic</h3>
-            <h2 style="color: #E63946; font-size: 36px; margin: 0;">$6.99</h2>
-            <p style="font-size: 14px; color: #555;">
-                Activism Mode<br>
-                Auto-Find Reps<br>
-                Mails Senate + House
-            </p>
+        <div class="price-card">
+            <div>
+                <div class="price-title">🏛️ Civic Blast</div>
+                <div class="price-tag">&#36;6.99</div>
+                <div class="price-desc">Activism Mode<br>Auto-Find Reps<br>Mails Senate + House</div>
+            </div>
         </div>
-
     </div>
     """
     st.markdown(html_pricing, unsafe_allow_html=True)
@@ -72,7 +99,7 @@ def show_splash():
         if st.button("🚀 Start Writing Now", type="primary", use_container_width=True):
             st.session_state.current_view = "main_app"
             st.rerun()
-            
+        
         st.write("")
         
         if st.button("Already a member? Log In", type="secondary", use_container_width=True):
