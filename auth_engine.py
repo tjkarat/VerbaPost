@@ -1,57 +1,48 @@
 import streamlit as st
+from supabase import create_client, Client
+import database
+import time
 
-# Try to import library, but don't crash if missing
+# --- LOAD SECRETS SAFELY ---
 try:
-    from supabase import create_client, Client
-    LIB_AVAILABLE = True
-except ImportError:
-    LIB_AVAILABLE = False
+    url = st.secrets.get("supabase", {}).get("url", "")
+    key = st.secrets.get("supabase", {}).get("key", "")
+    
+    if url and key:
+        supabase: Client = create_client(url, key)
+        AUTH_ACTIVE = True
+    else:
+        supabase = None
+        AUTH_ACTIVE = False
+except Exception as e:
+    supabase = None
+    AUTH_ACTIVE = False
+    print(f"Auth Init Error: {e}")
 
 def get_supabase_client():
-    """
-    Connects to Supabase only when requested.
-    Returns: (Client, ErrorString)
-    """
-    if not LIB_AVAILABLE:
-        return None, "Library 'supabase' not installed."
+    if not AUTH_ACTIVE: 
+        return None, "Missing [supabase] section in Secrets."
+    return supabase, None
 
-    try:
-        # Use .get() to avoid KeyErrors if secrets are missing
-        # This prevents the "Blank Page" crash
-        supabase_secrets = st.secrets.get("supabase", None)
-        
-        if not supabase_secrets:
-            return None, "Missing [supabase] section in Secrets."
-            
-        url = supabase_secrets.get("url")
-        key = supabase_secrets.get("key")
-        
-        if not url or not key:
-            return None, "Missing 'url' or 'key' inside [supabase] secrets."
-            
-        return create_client(url, key), None
-        
-    except Exception as e:
-        return None, f"Connection Error: {e}"
-
-def sign_up(email, password):
+# --- NEW SIGNUP SIGNATURE (Includes Address Fields) ---
+def sign_up(email, password, name, street, city, state, zip_code):
     client, err = get_supabase_client()
     if err: return None, err
     
     try:
         response = client.auth.sign_up({"email": email, "password": password})
-        # Lazy Import Database to avoid circular dependencies
-        import database
+        
         if response.user:
-             try:
-                 database.create_or_get_user(email)
-             except:
-                 pass
+             # 2. Sync with Database and UPDATE ADDRESS
+             database.create_or_get_user(email)
+             database.update_user_address(email, name, street, city, state, zip_code) # <--- NEW SAVE STEP
+             
              return response, None
         return None, "Signup failed (No user returned)"
     except Exception as e:
         return None, str(e)
 
+# --- SIGN IN (UNCHANGED) ---
 def sign_in(email, password):
     client, err = get_supabase_client()
     if err: return None, err
@@ -65,7 +56,7 @@ def sign_in(email, password):
             except:
                  pass
             return response, None
-        return None, "Login failed"
+        return None, str(e)
     except Exception as e:
         return None, str(e)
 
