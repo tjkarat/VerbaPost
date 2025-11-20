@@ -13,13 +13,13 @@ def show_splash():
     
     st.divider()
 
-    # --- HOW IT WORKS ---
+    # --- HOW IT WORKS (Updated Verbiage) ---
     st.subheader("How it Works")
     step1, step2, step3 = st.columns(3)
     
     with step1:
         st.markdown("### 🎙️ 1. Dictate")
-        st.write("Tap the mic and speak your mind. Our AI transcribes and polishes your message before you give the final edit.")
+        st.write("Tap the mic and speak naturally. Our AI transcribes, polishes, and prepares your message.")
     
     with step2:
         st.markdown("### ✍️ 2. Sign")
@@ -34,12 +34,11 @@ def show_splash():
     # --- PRICING TIERS (HTML GRID) ---
     st.subheader("Simple Pricing")
     
-    # Custom CSS for the Pricing Grid
     html_pricing = """
     <style>
         .price-card {
             background-color: #f9f9f9;
-            padding: 20px;
+            padding: 15px;
             border-radius: 10px;
             text-align: center;
             border: 1px solid #ddd;
