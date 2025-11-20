@@ -2,16 +2,30 @@ import streamlit as st
 from splash_view import show_splash
 from main_app_view import show_main_app
 from login_view import show_login
-import auth_engine # <--- We import the crash-prone file ONLY HERE
-import database # <--- And the database here
+import auth_engine 
+import database 
 import urllib.parse
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="VerbaPost", page_icon="📮", layout="centered")
 
-# --- CORE HANDLERS (The Logic that was previously causing the blank page) ---
+# --- CSS INJECTOR ---
+def inject_custom_css():
+    st.markdown("""
+        <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        .block-container {padding-top: 1rem !important; padding-bottom: 1rem !important;}
+        div.stButton > button {border-radius: 8px; font-weight: 600; border: 1px solid #e0e0e0;}
+        input {border-radius: 5px !important;}
+        </style>
+        """, unsafe_allow_html=True)
+
+inject_custom_css()
+
+# --- HANDLER FUNCTIONS (Defined Here to Pass to Login View) ---
 def handle_login(email, password):
-    """Calls auth_engine and handles session state on success/failure."""
     user, error = auth_engine.sign_in(email, password)
     if error:
         st.error(f"Login Failed: {error}")
@@ -19,8 +33,6 @@ def handle_login(email, password):
         st.success("Welcome back!")
         st.session_state.user = user
         st.session_state.user_email = email
-        
-        # Load Saved Address
         saved_addr = auth_engine.get_current_address(email)
         if saved_addr:
             st.session_state["from_name"] = saved_addr.get("name", "")
@@ -28,13 +40,11 @@ def handle_login(email, password):
             st.session_state["from_city"] = saved_addr.get("city", "")
             st.session_state["from_state"] = saved_addr.get("state", "")
             st.session_state["from_zip"] = saved_addr.get("zip", "")
-            
         st.session_state.current_view = "main_app"
         st.rerun()
 
-def handle_signup(email, password):
-    """Calls auth_engine for signup and handles session state."""
-    user, error = auth_engine.sign_up(email, password)
+def handle_signup(email, password, name, street, city, state, zip_code):
+    user, error = auth_engine.sign_up(email, password, name, street, city, state, zip_code)
     if error:
         st.error(f"Error: {error}")
     else:
@@ -43,7 +53,7 @@ def handle_signup(email, password):
         st.session_state.user_email = email
         st.session_state.current_view = "main_app"
         st.rerun()
-        
+
 # --- ROUTING LOGIC ---
 if "session_id" in st.query_params:
     session_id = st.query_params["session_id"]
@@ -62,18 +72,16 @@ if st.session_state.current_view == "splash":
     show_splash()
 
 elif st.session_state.current_view == "login":
-    # Pass the handler functions to the login view
+    # FIX: CALLING WITH CORRECT ARGUMENTS
     show_login(handle_login, handle_signup)
 
 elif st.session_state.current_view == "main_app":
-    # Removed Alpha tag and added navigation
     with st.sidebar:
         st.subheader("Navigation")
         if st.button("🏠 Home", use_container_width=True):
             st.session_state.current_view = "splash"
             st.rerun()
-        # Display User Status
         if st.session_state.user:
-            st.caption(f"Logged in: {st.session_state.user_email}")
+            st.caption(f"Logged in: {st.session_state.user.user.email}")
         
     show_main_app()
