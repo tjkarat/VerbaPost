@@ -21,7 +21,8 @@ def show_login(handle_login, handle_signup):
                 st.rerun()
             st.stop()
 
-        tab_login, tab_signup = st.tabs(["Log In", "Create Account"], index=1 if st.session_state.get('initial_mode', 'login') == 'signup' else 0) 
+        # FIX: Renamed 'index' to 'default_index'
+        tab_login, tab_signup = st.tabs(["Log In", "Create Account"], default_index=1 if st.session_state.get('initial_mode', 'login') == 'signup' else 0) 
 
         # --- LOGIN TAB ---
         with tab_login:
@@ -34,8 +35,8 @@ def show_login(handle_login, handle_signup):
 
         # --- SIGN UP TAB ---
         with tab_signup:
-            new_email = st.text_input("Email", key="s_email")
-            new_pass = st.text_input("Password", type="password", key="s_pass")
+            new_email = st.text_input("Email", key="new_email")
+            new_pass = st.text_input("Password", type="password", key="new_pass")
 
             st.markdown("---")
             st.subheader("Your Return Address (Saved Automatically)")
