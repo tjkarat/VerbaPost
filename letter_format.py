@@ -8,6 +8,7 @@ def create_pdf(text_content, recipient_info, return_address_info, is_heirloom, l
     pdf.add_page()
     
     # --- FONT SELECTION ---
+    font_family = "Helvetica"
     font_map = {
         "English": "IndieFlower-Regular.ttf",
         "Chinese": "MaShanZheng-Regular.ttf",
@@ -18,47 +19,43 @@ def create_pdf(text_content, recipient_info, return_address_info, is_heirloom, l
     if os.path.exists(target_font):
         pdf.add_font('Handwriting', '', target_font)
         font_family = 'Handwriting'
-    else:
-        font_family = "Helvetica"
 
-    # --- ADDRESS LOGIC (THE FIX) ---
-    # If Heirloom: Print addresses so Tarak can see them.
-    # If Standard (Lob): Leave top blank. Lob adds a cover page with addresses.
-    
+    # --- ADDRESS LOGIC (The Fix) ---
     if is_heirloom:
-        # 1. RETURN ADDRESS
+        # HEIRLOOM: Print everything so you can hand-write the envelope
         pdf.set_font("Helvetica", size=10)
         pdf.set_xy(10, 10)
         if return_address_info:
             pdf.multi_cell(0, 5, return_address_info)
         
-        # 2. RECIPIENT ADDRESS
         pdf.set_y(45)
         pdf.set_font("Helvetica", size=12)
         pdf.multi_cell(0, 6, recipient_info)
         
-        # Start body after address
+        # Start body lower down
         pdf.set_y(80)
+    
     else:
-        # STANDARD TIER: Leave 2 inches (50mm) blank at top for letterhead feel
-        # Lob adds a separate page 1, so our text starts on page 2 (or page 1 of content)
-        # We just start the text at a nice margin.
+        # STANDARD (LOB): Do NOT print addresses. 
+        # Lob generates a cover page. We just want the body text on a nice clean page.
+        # We start 40mm down to give it a "Letterhead" feel.
         pdf.set_y(40)
 
-    # --- 3. BODY TEXT ---
+    # --- BODY TEXT ---
     body_size = 16 if language in ["Chinese", "Japanese"] else 14
     pdf.set_font(font_family, size=body_size)
     pdf.multi_cell(0, 8, text_content)
     
-    # --- 4. SIGNATURE ---
+    # --- SIGNATURE ---
     pdf.ln(10)
     if os.path.exists(signature_path):
         try:
+            # Use current X position, calculate Y to prevent overlap
             pdf.image(signature_path, w=40) 
         except:
             pass
     
-    # --- 5. FOOTER ---
+    # --- FOOTER ---
     if not is_heirloom:
         pdf.set_y(-20)
         pdf.set_font("Helvetica", 'I', 9)
