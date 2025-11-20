@@ -2,7 +2,7 @@ import streamlit as st
 import auth_engine
 import time
 
-# FIX: Added required positional arguments handle_login and handle_signup
+# FIX: FUNCTION SIGNATURE NOW ACCEPTS HANDLERS
 def show_login(handle_login, handle_signup): 
     # Center the login box
     c1, c2, c3 = st.columns([1, 2, 1])
