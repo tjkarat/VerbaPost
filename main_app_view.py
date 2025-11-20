@@ -14,7 +14,7 @@ import payment_engine
 
 # --- CONFIGURATION ---
 MAX_BYTES_THRESHOLD = 35 * 1024 * 1024 
-# UPDATE THIS TO YOUR EXACT APP URL
+# YOUR APP URL
 YOUR_APP_URL = "https://verbapost.streamlit.app" 
 
 # --- PRICING ---
@@ -29,10 +29,11 @@ def reset_app():
     st.session_state.app_mode = "recording"
     st.session_state.overage_agreed = False
     st.session_state.payment_complete = False
-    # Clear URL params so we don't get stuck in a loop
     st.query_params.clear()
     if "stripe_url" in st.session_state:
         del st.session_state.stripe_url
+    if "last_config" in st.session_state:
+        del st.session_state.last_config
     st.rerun()
 
 def show_main_app():
@@ -42,8 +43,7 @@ def show_main_app():
         if payment_engine.check_payment_status(session_id):
             st.session_state.payment_complete = True
             st.toast("✅ Payment Confirmed! Recorder Unlocked.")
-            # We DO NOT clear query params immediately here to avoid a reload loop,
-            # but we will rely on payment_complete state.
+            st.query_params.clear()
         else:
             st.error("Payment verification failed.")
 
@@ -122,14 +122,16 @@ def show_main_app():
         st.subheader("4. Payment")
         st.info(f"Total: **${final_price:.2f}**")
         
-        # GENERATE LINK AUTOMATICALLY IN BACKGROUND
-        # We check if we already have a link for this exact price/tier to avoid re-generating on every pixel movement
+        # Check if we already generated a link for this specific price config
         current_config = f"{service_tier}_{final_price}"
+        
+        # Only call API if we haven't already for this config
         if "last_config" not in st.session_state or st.session_state.last_config != current_config:
+             # MATCHING ARGUMENTS EXACTLY HERE
              url, session_id = payment_engine.create_checkout_session(
                 product_name=f"VerbaPost {service_tier}",
                 amount_in_cents=int(final_price * 100),
-                success_url=YOUR_APP_URL, # Redirects back to app root
+                success_url=YOUR_APP_URL, 
                 cancel_url=YOUR_APP_URL
             )
              st.session_state.stripe_url = url
@@ -137,13 +139,12 @@ def show_main_app():
              st.session_state.last_config = current_config
         
         if st.session_state.stripe_url:
-            # SINGLE BUTTON: Takes user directly to Stripe
             st.link_button(f"💳 Pay ${final_price:.2f} & Unlock Recorder", st.session_state.stripe_url, type="primary")
-            st.caption("Secure checkout via Stripe. You will be redirected back automatically.")
+            st.caption("Secure checkout via Stripe.")
         else:
-            st.error("Unable to connect to payment processor.")
+            st.error(f"Unable to connect to payment processor. {st.session_state.stripe_session_id}") # Show error msg
             
-        # Manual check button just in case auto-redirect fails on some browsers
+        # Manual check button
         if st.button("🔄 I've already paid (Refresh Status)"):
             st.rerun()
             
@@ -244,6 +245,7 @@ def show_main_app():
             if not is_heirloom:
                 addr_to = {'name': to_name, 'street': to_street, 'city': to_city, 'state': to_state, 'zip': to_zip}
                 addr_from = {'name': from_name, 'street': from_street, 'city': from_city, 'state': from_state, 'zip': from_zip}
+                st.write("🚀 Transmitting to Lob...")
                 mailer.send_letter(pdf_path, addr_to, addr_from)
             else:
                 st.info("🏺 Added to Heirloom Queue")
@@ -253,11 +255,8 @@ def show_main_app():
         st.balloons()
         st.success("Letter Sent!")
         
-        safe_name = "".join(x for x in to_name if x.isalnum())
-        unique_name = f"Letter_{safe_name}_{datetime.now().strftime('%H%M')}.pdf"
-
         with open(pdf_path, "rb") as f:
-            st.download_button("📄 Download Copy", f, unique_name, "application/pdf", use_container_width=True)
+            st.download_button("📄 Download Copy", f, "letter.pdf", use_container_width=True)
 
-        if st.button("Start New Letter"):
+        if st.button("Start New"):
             reset_app()
