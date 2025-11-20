@@ -1,40 +1,47 @@
 import streamlit as st
-# Import database for syncing
-import database
 
-# We do NOT initialize the client here anymore.
-# We verify libraries exist, but don't connect yet.
+# Try to import library, but don't crash if missing
 try:
     from supabase import create_client, Client
     LIB_AVAILABLE = True
 except ImportError:
     LIB_AVAILABLE = False
 
-def get_client():
+def get_supabase_client():
     """
-    Connects to Supabase only when needed.
+    Connects to Supabase only when requested.
+    Returns: (Client, ErrorString)
     """
     if not LIB_AVAILABLE:
         return None, "Library 'supabase' not installed."
-        
+
     try:
-        # Use .get() to avoid key errors
-        url = st.secrets.get("supabase", {}).get("url", "")
-        key = st.secrets.get("supabase", {}).get("key", "")
+        # Use .get() to avoid KeyErrors if secrets are missing
+        # This prevents the "Blank Page" crash
+        supabase_secrets = st.secrets.get("supabase", None)
+        
+        if not supabase_secrets:
+            return None, "Missing [supabase] section in Secrets."
+            
+        url = supabase_secrets.get("url")
+        key = supabase_secrets.get("key")
         
         if not url or not key:
-            return None, "Missing Secrets: Check [supabase] section."
+            return None, "Missing 'url' or 'key' inside [supabase] secrets."
             
         return create_client(url, key), None
+        
     except Exception as e:
-        return None, str(e)
+        return None, f"Connection Error: {e}"
 
 def sign_up(email, password):
-    client, err = get_client()
+    client, err = get_supabase_client()
     if err: return None, err
     
     try:
         response = client.auth.sign_up({"email": email, "password": password})
+        # Lazy Import Database to avoid circular dependencies
+        import database
         if response.user:
              try:
                  database.create_or_get_user(email)
@@ -46,12 +53,13 @@ def sign_up(email, password):
         return None, str(e)
 
 def sign_in(email, password):
-    client, err = get_client()
+    client, err = get_supabase_client()
     if err: return None, err
     
     try:
         response = client.auth.sign_in_with_password({"email": email, "password": password})
         if response.user:
+            import database
             try:
                  database.create_or_get_user(email)
             except:
@@ -62,7 +70,7 @@ def sign_in(email, password):
         return None, str(e)
 
 def get_current_address(email):
-    import database # Late import
+    import database
     try:
         user = database.get_user_by_email(email)
         if user:

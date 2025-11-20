@@ -3,14 +3,22 @@ import auth_engine
 import time
 
 def show_login():
-    # DEBUG: This title should appear immediately
-    st.title("VerbaPost 📮")
-    st.subheader("Member Access")
-    
-    # Center the login box
     c1, c2, c3 = st.columns([1, 2, 1])
     
     with c2:
+        st.title("VerbaPost 📮")
+        st.subheader("Member Access")
+        
+        # Test connection immediately to show error on screen instead of blank page
+        client, err = auth_engine.get_supabase_client()
+        if err:
+            st.error(f"⚠️ System Error: {err}")
+            st.info("Please add your Supabase URL and Key to Streamlit Secrets.")
+            if st.button("Back"):
+                st.session_state.current_view = "splash"
+                st.rerun()
+            st.stop()
+
         tab_login, tab_signup = st.tabs(["Log In", "Create Account"])
 
         # --- LOGIN TAB ---
@@ -31,6 +39,7 @@ def show_login():
                         # LOAD SAVED DATA
                         saved_addr = auth_engine.get_current_address(email)
                         if saved_addr:
+                            st.session_state["to_name"] = "" # Clear recipient
                             st.session_state["from_name"] = saved_addr.get("name", "")
                             st.session_state["from_street"] = saved_addr.get("street", "")
                             st.session_state["from_city"] = saved_addr.get("city", "")
@@ -40,7 +49,7 @@ def show_login():
                         st.session_state.current_view = "main_app"
                         st.rerun()
 
-        # --- SIGN UP TAB ---
+        # --- SIGNUP TAB ---
         with tab_signup:
             new_email = st.text_input("Email", key="s_email")
             new_pass = st.text_input("Password", type="password", key="s_pass")
