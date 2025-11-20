@@ -37,7 +37,8 @@ def send_letter(pdf_path, to_addr, from_addr):
                 "from[address_city]": from_addr['city'],
                 "from[address_state]": from_addr['state'],
                 "from[address_zip]": from_addr['zip'],
-                "color": "false"
+                "color": "false",
+                "use_type": "operational" # <--- THE FIX
             }
             
             response = requests.post(
@@ -48,12 +49,16 @@ def send_letter(pdf_path, to_addr, from_addr):
             )
             
             if response.status_code == 200:
-                st.toast(f"✅ Lob ID: {response.json()['id']}")
-                print(f"✅ Lob Success: {response.json()['id']}")
+                # Success!
+                lob_id = response.json()['id']
+                st.toast(f"✅ Lob ID: {lob_id}")
+                print(f"✅ Lob Success: {lob_id}")
                 return True
             else:
+                # Error Handling
                 error_msg = response.json().get('error', {}).get('message', 'Unknown Error')
                 st.error(f"Lob Error: {error_msg}")
+                print(f"❌ Lob Error: {error_msg}")
                 return False
 
     except Exception as e:
