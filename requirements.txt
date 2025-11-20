@@ -9,5 +9,5 @@ numpy
 zipcodes
 stripe
 psycopg2-binary
-lob-python
+lob-python>=5.0.0
 gotrue
