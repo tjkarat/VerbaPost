@@ -6,12 +6,13 @@ from datetime import datetime
 import urllib.parse
 
 # Import core logic
-import voice_processor  # <--- Correct Import
+import ai_engine
 import database
 import letter_format
 import mailer
 import zipcodes
 import payment_engine
+import civic_engine
 
 # --- CONFIGURATION ---
 MAX_BYTES_THRESHOLD = 35 * 1024 * 1024 
@@ -72,20 +73,55 @@ def show_main_app():
         if st.button("🔄 Start New Letter", type="primary", use_container_width=True):
             reset_app()
     
-    # --- 1. ADDRESSING ---
-    st.subheader("1. Addressing")
-    col_to, col_from = st.tabs(["👉 Recipient", "👈 Sender"])
+    # ==================================================
+    #  1. SETTINGS (MOVED TO TOP)
+    # ==================================================
+    st.subheader("1. Settings")
+    
+    # Tier Selector
+    service_tier = st.radio("Choose Service:", 
+        [
+            f"⚡ Standard (${COST_STANDARD})", 
+            f"🏺 Heirloom (${COST_HEIRLOOM})", 
+            f"🏛️ Civic (${COST_CIVIC})"
+        ],
+        horizontal=True,
+        key="tier_select"
+    )
+    is_heirloom = "Heirloom" in service_tier
+    is_civic = "Civic" in service_tier
 
+    st.divider()
+
+    # ==================================================
+    #  2. ADDRESSING (CONDITIONAL)
+    # ==================================================
+    st.subheader("2. Addressing")
+
+    # HELPER FOR PERSISTENCE
     def get_val(key): return st.session_state.get(key, st.query_params.get(key, ""))
 
-    with col_to:
-        to_name = st.text_input("Recipient Name", value=get_val("to_name"), key="to_name")
-        to_street = st.text_input("Street Address", value=get_val("to_street"), key="to_street")
-        c1, c2 = st.columns(2)
-        to_city = c1.text_input("City", value=get_val("to_city"), key="to_city")
-        to_state = c2.text_input("State", value=get_val("to_state"), max_chars=2, key="to_state")
-        to_zip = c2.text_input("Zip", value=get_val("to_zip"), max_chars=5, key="to_zip")
+    # LOGIC: If Civic, we ONLY show Sender. If Standard/Heirloom, we show Both.
+    if is_civic:
+        st.info("🏛️ **Civic Mode:** We will automatically find your 2 Senators and 1 Representative based on your Return Address.")
+        col_from, col_hidden = st.tabs(["👈 Your Address (Required)", "🚫 Recipient (Auto-Detected)"])
+    else:
+        col_to, col_from = st.tabs(["👉 Recipient", "👈 Sender"])
 
+    # RECIPIENT TAB (Only visible/active for Standard/Heirloom)
+    if not is_civic:
+        with col_to:
+            to_name = st.text_input("Recipient Name", value=get_val("to_name"), key="to_name")
+            to_street = st.text_input("Street Address", value=get_val("to_street"), key="to_street")
+            c1, c2 = st.columns(2)
+            to_city = c1.text_input("City", value=get_val("to_city"), key="to_city")
+            to_state = c2.text_input("State", value=get_val("to_state"), max_chars=2, key="to_state")
+            to_zip = c2.text_input("Zip", value=get_val("to_zip"), max_chars=5, key="to_zip")
+    else:
+        # Dummy values for Civic so validation passes later
+        to_name, to_street, to_city, to_state, to_zip = "Civic", "Civic", "Civic", "TN", "00000"
+
+    # SENDER TAB (Always Active)
     with col_from:
         from_name = st.text_input("Your Name", value=get_val("from_name"), key="from_name")
         from_street = st.text_input("Your Street", value=get_val("from_street"), key="from_street")
@@ -94,30 +130,28 @@ def show_main_app():
         from_state = c3.text_input("Your State", value=get_val("from_state"), max_chars=2, key="from_state")
         from_zip = c4.text_input("Your Zip", value=get_val("from_zip"), max_chars=5, key="from_zip")
 
-    if not (to_name and to_street and to_city and to_state and to_zip):
-        st.info("👇 Fill out the **Recipient** tab to unlock the tools.")
-        return
-    if not (from_name and from_street and from_city and from_state and from_zip):
-         st.warning("👇 Fill out the **Sender** tab.")
-         return
+    # CONDITIONAL VALIDATION
+    if is_civic:
+        # Only check Sender
+        if not (from_name and from_street and from_city and from_state and from_zip):
+             st.warning("👇 Please fill out **Your Address** so we can find your representatives.")
+             return
+    else:
+        # Check Both
+        if not (to_name and to_street and to_city and to_state and to_zip):
+            st.info("👇 Fill out the **Recipient** tab to unlock the tools.")
+            return
+        if not (from_name and from_street and from_city and from_state and from_zip):
+             st.warning("👇 Fill out the **Sender** tab.")
+             return
 
-    # --- 2. SETTINGS & SIGNATURE ---
+    # --- 3. SIGNATURE ---
     st.divider()
-    c_set, c_sig = st.columns(2)
-    with c_set:
-        st.subheader("2. Settings")
-        service_tier = st.radio("Service Level:", 
-            [f"⚡ Standard (${COST_STANDARD})", f"🏺 Heirloom (${COST_HEIRLOOM})", f"🏛️ Civic (${COST_CIVIC})"],
-            key="tier_select"
-        )
-        is_heirloom = "Heirloom" in service_tier
-        is_civic = "Civic" in service_tier
-    with c_sig:
-        st.subheader("3. Sign")
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 165, 0, 0.3)", stroke_width=2, stroke_color="#000", background_color="#fff",
-            height=100, width=200, drawing_mode="freedraw", key="sig"
-        )
+    st.subheader("3. Sign")
+    canvas_result = st_canvas(
+        fill_color="rgba(255, 165, 0, 0.3)", stroke_width=2, stroke_color="#000", background_color="#fff",
+        height=100, width=200, drawing_mode="freedraw", key="sig"
+    )
 
     st.divider()
     
@@ -134,6 +168,7 @@ def show_main_app():
         st.subheader("4. Payment")
         st.info(f"Total: **${final_price:.2f}**")
         
+        # Build URL params
         params = {
             "to_name": to_name, "to_street": to_street, "to_city": to_city, "to_state": to_state, "to_zip": to_zip,
             "from_name": from_name, "from_street": from_street, "from_city": from_city, "from_state": from_state, "from_zip": from_zip
@@ -156,7 +191,6 @@ def show_main_app():
         if st.session_state.stripe_url:
             st.link_button(f"💳 Pay ${final_price:.2f} & Unlock Recorder", st.session_state.stripe_url, type="primary")
             st.caption("Secure checkout via Stripe.")
-            
             if st.button("🔄 I've Paid (Refresh Status)"):
                  if payment_engine.check_payment_status(st.session_state.stripe_session_id):
                      st.session_state.payment_complete = True
@@ -206,8 +240,7 @@ def show_main_app():
     elif st.session_state.app_mode == "transcribing":
         with st.spinner("🧠 AI is writing your letter..."):
             try:
-                # FIXED CALL TO VOICE_PROCESSOR
-                text = voice_processor.transcribe_audio(st.session_state.audio_path)
+                text = ai_engine.transcribe_audio(st.session_state.audio_path)
                 st.session_state.transcribed_text = text
                 st.session_state.app_mode = "editing"
                 st.rerun()
@@ -225,8 +258,7 @@ def show_main_app():
         edited_text = st.text_area("Edit Text:", value=st.session_state.transcribed_text, height=300)
         c1, c2 = st.columns([1, 3])
         if c1.button("✨ AI Polish"):
-             # FIXED CALL TO VOICE_PROCESSOR
-             st.session_state.transcribed_text = voice_processor.polish_text(edited_text)
+             st.session_state.transcribed_text = ai_engine.polish_text(edited_text)
              st.rerun()
         if c2.button("🗑️ Re-Record (Free)"):
              st.session_state.app_mode = "recording"
@@ -249,31 +281,22 @@ def show_main_app():
                 sig_path = "temp_signature.png"
                 img.save(sig_path)
 
-            pdf_path = letter_format.create_pdf(
-                st.session_state.transcribed_text, 
-                f"{to_name}\n{to_street}\n{to_city}, {to_state} {to_zip}", 
-                f"{from_name}\n{from_street}\n{from_city}, {from_state} {from_zip}" if from_name else "", 
-                is_heirloom, 
-                st.session_state.get("language", "English"),
-                "final_letter.pdf", 
-                sig_path
-            )
-            
-            if not is_heirloom:
-                addr_to = {'name': to_name, 'street': to_street, 'city': to_city, 'state': to_state, 'zip': to_zip}
-                addr_from = {'name': from_name, 'street': from_street, 'city': from_city, 'state': from_state, 'zip': from_zip}
-                st.write("🚀 Transmitting to Lob...")
-                mailer.send_letter(pdf_path, addr_to, addr_from)
-            else:
-                st.info("🏺 Added to Heirloom Queue")
-            
-            st.write("✅ Done!")
-
-        st.balloons()
-        st.success("Letter Sent!")
-        
-        with open(pdf_path, "rb") as f:
-            st.download_button("📄 Download Receipt", f, "letter.pdf", use_container_width=True)
-
-        if st.button("Start New"):
-            reset_app()
+            # --- CIVIC LOGIC START ---
+            if is_civic:
+                st.write("🏛️ Finding your Representatives via Google API...")
+                full_user_address = f"{from_street}, {from_city}, {from_state} {from_zip}"
+                
+                # Call the Civic Engine (Day 5 Logic)
+                targets = civic_engine.get_reps(full_user_address)
+                
+                if not targets:
+                    st.error("Could not find representatives for this address.")
+                    st.stop()
+                
+                final_files = []
+                
+                for i, target in enumerate(targets):
+                    st.write(f"📄 Processing letter for {target['title']} {target['name']}...")
+                    
+                    # Create unique filename
+                    fname = f"Letter_to_{target['name'].replace(' ', '')}.pdf"
