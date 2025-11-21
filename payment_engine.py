@@ -1,4 +1,3 @@
-cat <<EOF > payment_engine.py
 import stripe
 import streamlit as st
 
@@ -9,12 +8,15 @@ except Exception as e:
     pass
 
 def create_checkout_session(product_name, amount_in_cents, success_url, cancel_url):
+    """
+    Creates a Stripe Checkout Session.
+    """
     try:
+        # Verify key exists
         if not stripe.api_key:
             return None, "Error: Stripe API Key is missing."
 
-        # SMART JOIN FIX
-        # If success_url already has parameters (contains '?'), use '&' to join session_id
+        # SMART JOIN FIX (Handles ? vs & in URL)
         join_char = "&" if "?" in success_url else "?"
         final_success_url = f"{success_url}{join_char}session_id={{CHECKOUT_SESSION_ID}}"
 
@@ -39,6 +41,9 @@ def create_checkout_session(product_name, amount_in_cents, success_url, cancel_u
         return None, str(e)
 
 def check_payment_status(session_id):
+    """
+    Verifies a session ID with Stripe to ensure it is actually paid.
+    """
     try:
         session = stripe.checkout.Session.retrieve(session_id)
         if session.payment_status == 'paid':
@@ -46,4 +51,3 @@ def check_payment_status(session_id):
     except:
         pass
     return False
-EOF
