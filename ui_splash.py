@@ -1,6 +1,12 @@
 import streamlit as st
 
 def show_splash():
+    # --- CONFIG ---
+    P_STANDARD = ".99"
+    P_HEIRLOOM = ".99"
+    P_CIVIC = ".99"
+
+    # --- HERO ---
     st.title("VerbaPost 📮")
     st.subheader("The Authenticity Engine.")
     st.markdown("##### Texts are trivial. Emails are ignored. Real letters get read.")
@@ -8,6 +14,7 @@ def show_splash():
     st.divider()
 
     # --- HOW IT WORKS ---
+    st.subheader("How it Works")
     c1, c2, c3 = st.columns(3)
     with c1:
         st.info("🎙️ **1. Dictate**")
@@ -21,28 +28,41 @@ def show_splash():
 
     st.divider()
 
-    # --- PRICING TIERS (Fail-Safe Text Version) ---
+    # --- PRICING TIERS (Native + CSS) ---
     st.subheader("Simple Pricing")
     
+    # Inject CSS for styling the native containers
+    st.markdown("""
+    <style>
+        [data-testid="stMetricValue"] {
+            font-size: 2.5rem !important;
+            color: #E63946;
+        }
+        div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            background-color: #f9f9f9;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
     p1, p2, p3 = st.columns(3)
     
     with p1:
-        with st.container(border=True):
-            st.markdown("### ⚡ Standard")
-            st.markdown("## .99") # Pure Markdown - Cannot Break
-            st.caption("API Fulfillment • Window Envelope • Mailed in 24hrs")
+        st.markdown("### ⚡ Standard")
+        st.metric(label="Price", value=P_STANDARD, label_visibility="collapsed")
+        st.caption("API Fulfillment • Window Envelope • Mailed in 24hrs")
 
     with p2:
-        with st.container(border=True):
-            st.markdown("### 🏺 Heirloom")
-            st.markdown("## .99")
-            st.caption("Hand-Stamped • Premium Paper • Mailed from Nashville")
+        st.markdown("### 🏺 Heirloom")
+        st.metric(label="Price", value=P_HEIRLOOM, label_visibility="collapsed")
+        st.caption("Hand-Stamped • Premium Paper • Mailed from Nashville")
 
     with p3:
-        with st.container(border=True):
-            st.markdown("### 🏛️ Civic Blast")
-            st.markdown("## .99")
-            st.caption("Activism Mode • Auto-Find Reps • Mails Senate + House")
+        st.markdown("### 🏛️ Civic Blast")
+        st.metric(label="Price", value=P_CIVIC, label_visibility="collapsed")
+        st.caption("Activism Mode • Auto-Find Reps • Mails Senate + House")
 
     st.divider()
 
