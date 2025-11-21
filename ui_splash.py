@@ -1,7 +1,12 @@
 import streamlit as st
 
-# Version 11.0 - Native Streamlit Components (Zero HTML Strings)
+# Version 10.1 - Fixed f-string CSS Syntax
 def show_splash():
+    # --- CONFIG ---
+    P_STANDARD = "2.99"
+    P_HEIRLOOM = "5.99"
+    P_CIVIC = "6.99"
+
     # --- HERO ---
     st.title("VerbaPost 📮")
     st.subheader("The Authenticity Engine.")
@@ -23,46 +28,74 @@ def show_splash():
 
     st.divider()
 
-    # --- PRICING TIERS (NATIVE IMPLEMENTATION) ---
+    # --- PRICING TIERS ---
     st.subheader("Simple Pricing")
     
-    # CSS for styling the native containers to look like cards
-    st.markdown("""
+    # FIXED: All CSS curly braces are doubled {{ }} to escape them in the f-string
+    html_pricing = f"""
     <style>
-        div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
+        .price-card {{
             background-color: #f9f9f9;
+            padding: 15px;
             border-radius: 10px;
-            padding: 20px;
-            border: 1px solid #ddd;
             text-align: center;
-        }
-        [data-testid="stMetricValue"] {
-            font-size: 2.5rem !important;
-            color: #E63946 !important;
-        }
-        /* Specific styling for Heirloom card if possible, otherwise uniform */
+            border: 1px solid #ddd;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }}
+        .price-tag {{
+            color: #E63946;
+            font-size: 32px;
+            font-weight: bold;
+            margin: 10px 0;
+        }}
+        .price-title {{
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+        }}
+        .price-desc {{
+            font-size: 14px;
+            color: #666;
+            line-height: 1.4;
+        }}
+        .grid-container {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }}
     </style>
-    """, unsafe_allow_html=True)
 
-    p1, p2, p3 = st.columns(3)
+    <div class="grid-container">
+        <div class="price-card">
+            <div>
+                <div class="price-title">⚡ Standard</div>
+                <div class="price-tag"></div>
+                <div class="price-desc">API Fulfillment<br>Window Envelope<br>Mailed in 24hrs</div>
+            </div>
+        </div>
 
-    with p1:
-        with st.container():
-            st.markdown("### ⚡ Standard")
-            st.metric(label="Price", value="$2.99", label_visibility="collapsed")
-            st.caption("API Fulfillment • Window Envelope • Mailed in 24hrs")
+        <div class="price-card" style="border: 2px solid #4CAF50; background-color: #f0fff4;">
+            <div>
+                <div class="price-title">🏺 Heirloom</div>
+                <div class="price-tag"></div>
+                <div class="price-desc">Hand-Stamped<br>Premium Paper<br>Mailed from Nashville</div>
+            </div>
+        </div>
 
-    with p2:
-        with st.container():
-            st.markdown("### 🏺 Heirloom")
-            st.metric(label="Price", value="$5.99", label_visibility="collapsed")
-            st.caption("Hand-Stamped • Premium Paper • Mailed from Nashville")
-
-    with p3:
-        with st.container():
-            st.markdown("### 🏛️ Civic Blast")
-            st.metric(label="Price", value="$6.99", label_visibility="collapsed")
-            st.caption("Activism Mode • Auto-Find Reps • Mails Senate + House")
+        <div class="price-card">
+            <div>
+                <div class="price-title">🏛️ Civic Blast</div>
+                <div class="price-tag"></div>
+                <div class="price-desc">Activism Mode<br>Auto-Find Reps<br>Mails Senate + House</div>
+            </div>
+        </div>
+    </div>
+    """
+    st.markdown(html_pricing, unsafe_allow_html=True) 
 
     st.divider()
 
