@@ -47,35 +47,33 @@ def reset_app():
     st.rerun()
 
 def show_main_app():
-    # --- 0. URL STATE REHYDRATION (THE FIX) ---
-    # If returning from Stripe, grab address from URL and save to Session State
-    qp = st.query_params
-    if "session_id" in qp:
-        # Restore Address Data
-        keys_to_restore = ["to_name", "to_street", "to_city", "to_state", "to_zip", 
-                           "from_name", "from_street", "from_city", "from_state", "from_zip"]
-        for key in keys_to_restore:
-            if key in qp:
-                st.session_state[key] = qp[key]
+    # --- 0. SAFETY CHECK: INITIALIZE SESSION STATE ---
+    # This block MUST run before anything else to prevent AttributeError
+    defaults = {
+        "app_mode": "recording",
+        "audio_path": None,
+        "transcribed_text": "",
+        "overage_agreed": False,
+        "payment_complete": False,
+        "processed_ids": [],
+        "stripe_url": None,
+        "last_config": None
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
 
-        # Verify Payment
-        session_id = qp["session_id"]
-        if session_id not in st.session_state.get("processed_ids", []):
+    # --- 1. AUTO-DETECT RETURN FROM STRIPE ---
+    if "session_id" in st.query_params:
+        session_id = st.query_params["session_id"]
+        if session_id not in st.session_state.processed_ids:
             if payment_engine.check_payment_status(session_id):
                 st.session_state.payment_complete = True
-                if "processed_ids" not in st.session_state:
-                    st.session_state.processed_ids = []
                 st.session_state.processed_ids.append(session_id)
                 st.toast("✅ Payment Confirmed! Recorder Unlocked.")
-                # We do NOT clear query params here, or the address will vanish again!
-                # We clear them only after the letter is sent.
+                st.query_params.clear() 
             else:
                 st.error("Payment verification failed.")
-
-    # --- INIT STATE ---
-    if "app_mode" not in st.session_state: st.session_state.app_mode = "recording"
-    if "audio_path" not in st.session_state: st.session_state.audio_path = None
-    if "payment_complete" not in st.session_state: st.session_state.payment_complete = False
     
     # --- SIDEBAR RESET ---
     with st.sidebar:
@@ -83,13 +81,11 @@ def show_main_app():
         if st.button("🔄 Start New Letter", type="primary", use_container_width=True):
             reset_app()
     
-    # --- 1. ADDRESSING ---
+    # --- 2. ADDRESSING ---
     st.subheader("1. Addressing")
     col_to, col_from = st.tabs(["👉 Recipient", "👈 Sender"])
 
-    # Helper to prioritize Session State (Restored) -> URL -> Empty
-    def get_val(key): 
-        return st.session_state.get(key, st.query_params.get(key, ""))
+    def get_val(key): return st.session_state.get(key, st.query_params.get(key, ""))
 
     with col_to:
         to_name = st.text_input("Recipient Name", value=get_val("to_name"), key="to_name")
@@ -128,7 +124,7 @@ def show_main_app():
              st.warning("👇 Fill out the **Sender** tab.")
              return
 
-    # --- 2. SIGNATURE ---
+    # --- 3. SIGNATURE ---
     st.divider()
     st.subheader("3. Sign")
     canvas_result = st_canvas(
@@ -142,7 +138,10 @@ def show_main_app():
     if is_heirloom: price = COST_HEIRLOOM
     elif is_civic: price = COST_CIVIC
     else: price = COST_STANDARD
-    final_price = price + (COST_OVERAGE if st.session_state.overage_agreed else 0.00)
+    
+    # FIX: Use .get() for safety. This prevents the crash if the key is missing.
+    overage = COST_OVERAGE if st.session_state.get("overage_agreed", False) else 0.00
+    final_price = price + overage
 
     # ==================================================
     #  PAYMENT GATE
@@ -151,7 +150,6 @@ def show_main_app():
         st.subheader("4. Payment")
         st.info(f"Total: **${final_price:.2f}**")
         
-        # BUILD RETURN URL (PACKING DATA)
         params = {
             "to_name": to_name, "to_street": to_street, "to_city": to_city, "to_state": to_state, "to_zip": to_zip,
             "from_name": from_name, "from_street": from_street, "from_city": from_city, "from_state": from_state, "from_zip": from_zip
@@ -240,7 +238,6 @@ def show_main_app():
         st.subheader("📝 Review")
         st.audio(st.session_state.audio_path)
         edited_text = st.text_area("Edit Text:", value=st.session_state.transcribed_text, height=300)
-        
         c1, c2 = st.columns([1, 3])
         if c1.button("✨ AI Polish"):
              st.session_state.transcribed_text = ai_engine.polish_text(edited_text)
@@ -248,7 +245,6 @@ def show_main_app():
         if c2.button("🗑️ Re-Record (Free)"):
              st.session_state.app_mode = "recording"
              st.rerun()
-
         st.markdown("---")
         if st.button("🚀 Approve & Send Now", type="primary", use_container_width=True):
             st.session_state.transcribed_text = edited_text
@@ -267,86 +263,34 @@ def show_main_app():
                 sig_path = "temp_signature.png"
                 img.save(sig_path)
 
-            # --- CIVIC LOGIC ---
-            if is_civic:
-                st.write("🏛️ Finding your Representatives...")
-                full_user_address = f"{from_street}, {from_city}, {from_state} {from_zip}"
-                
-                try:
-                    targets = civic_engine.get_reps(full_user_address)
-                except Exception as e:
-                     st.error(f"Civic Engine Error: {e}")
-                     targets = []
-
-                if not targets:
-                    status.update(label="❌ Error: Address Lookup Failed", state="error")
-                    st.error("Could not find representatives.")
-                    if st.button("Edit Address"):
-                        st.session_state.app_mode = "recording"
-                        st.rerun()
-                    st.stop()
-                
-                final_files = []
+            pdf_path = letter_format.create_pdf(
+                st.session_state.transcribed_text, 
+                f"{to_name}\n{to_street}\n{to_city}, {to_state} {to_zip}", 
+                f"{from_name}\n{from_street}\n{from_city}, {from_state} {from_zip}" if from_name else "", 
+                is_heirloom, 
+                st.session_state.get("language", "English"),
+                "final_letter.pdf", 
+                sig_path
+            )
+            
+            if not is_heirloom:
+                addr_to = {'name': to_name, 'street': to_street, 'city': to_city, 'state': to_state, 'zip': to_zip}
                 addr_from = {'name': from_name, 'street': from_street, 'city': from_city, 'state': from_state, 'zip': from_zip}
-                
-                for target in targets:
-                    st.write(f"Processing for {target['name']}...")
-                    fname = f"Letter_to_{target['name'].replace(' ', '')}.pdf"
-                    t_addr = target['address_obj']
-                    
-                    pdf_path = letter_format.create_pdf(
-                        st.session_state.transcribed_text, 
-                        f"{target['name']}\n{t_addr['street']}\n{t_addr['city']}, {t_addr['state']} {t_addr['zip']}",
-                        f"{from_name}\n{from_street}\n{from_city}, {from_state} {from_zip}",
-                        False, 
-                        st.session_state.get("language", "English"),
-                        fname, 
-                        sig_path
-                    )
-                    final_files.append(pdf_path)
-                    t_addr_lob = {'name': target['name'], 'street': t_addr['street'], 'city': t_addr['city'], 'state': t_addr['state'], 'zip': t_addr['zip']}
-                    mailer.send_letter(pdf_path, t_addr_lob, addr_from)
-
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, "w") as zf:
-                    for fp in final_files: zf.write(fp, os.path.basename(fp))
-                
-                st.success("All 3 Letters Sent!")
-                st.download_button("📦 Download All", zip_buffer.getvalue(), "Civic_Blast.zip", "application/zip")
-
-            # --- STANDARD LOGIC ---
+                st.write("🚀 Transmitting to Lob...")
+                mailer.send_letter(pdf_path, addr_to, addr_from)
             else:
-                pdf_path = letter_format.create_pdf(
-                    st.session_state.transcribed_text, 
-                    f"{to_name}\n{to_street}\n{to_city}, {to_state} {to_zip}", 
-                    f"{from_name}\n{from_street}\n{from_city}, {from_state} {from_zip}" if from_name else "", 
-                    is_heirloom, 
-                    st.session_state.get("language", "English"),
-                    "final_letter.pdf", 
-                    sig_path
-                )
-                
-                if not is_heirloom:
-                    addr_to = {'name': to_name, 'street': to_street, 'city': to_city, 'state': to_state, 'zip': to_zip}
-                    addr_from = {'name': from_name, 'street': from_street, 'city': from_city, 'state': from_state, 'zip': from_zip}
-                    st.write("🚀 Transmitting to Lob...")
-                    mailer.send_letter(pdf_path, addr_to, addr_from)
-                else:
-                    st.info("🏺 Added to Heirloom Queue")
-                
-                st.write("✅ Done!")
-                st.success("Letter Sent!")
-                with open(pdf_path, "rb") as f:
-                    st.download_button("📄 Download Receipt", f, "letter.pdf", use_container_width=True)
+                st.info("🏺 Added to Heirloom Queue")
+            
+            st.write("✅ Done!")
+            st.success("Letter Sent!")
+            with open(pdf_path, "rb") as f:
+                st.download_button("📄 Download Receipt", f, "letter.pdf", use_container_width=True)
             
             # AUTO-SAVE
             if st.session_state.get("user"):
                 try:
                     database.update_user_address(st.session_state.user.user.email, from_name, from_street, from_city, from_state, from_zip)
                 except: pass
-            
-            # NOW WE CAN CLEAR PARAMS
-            st.query_params.clear()
 
         if st.button("Start New"):
             reset_app()
