@@ -1,10 +1,11 @@
 import streamlit as st
 
+# Version 9.0 - Direct Markdown Injection
 def show_splash():
     # --- CONFIG ---
-    P_STANDARD = ".99"
-    P_HEIRLOOM = ".99"
-    P_CIVIC = ".99"
+    P_STANDARD = "$2.99"
+    P_HEIRLOOM = "$5.99"
+    P_CIVIC = "$6.99"
 
     # --- HERO ---
     st.title("VerbaPost 📮")
@@ -28,10 +29,11 @@ def show_splash():
 
     st.divider()
 
-    # --- PRICING TIERS (HTML GRID) ---
+    # --- PRICING TIERS ---
     st.subheader("Simple Pricing")
     
-    html_pricing = """
+    # We inject CSS separately to keep the HTML clean
+    st.markdown("""
     <style>
         .price-card {
             background-color: #f9f9f9;
@@ -54,10 +56,11 @@ def show_splash():
             font-size: 18px;
             font-weight: 600;
             margin-bottom: 5px;
+            color: #333;
         }
         .price-desc {
             font-size: 14px;
-            color: #555;
+            color: #666;
             line-height: 1.4;
         }
         .grid-container {
@@ -65,21 +68,28 @@ def show_splash():
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 15px;
         }
+        .heirloom {
+            border: 2px solid #4CAF50;
+            background-color: #f0fff4;
+        }
     </style>
+    """, unsafe_allow_html=True)
 
+    # We render the HTML grid directly
+    st.markdown(f"""
     <div class="grid-container">
         <div class="price-card">
             <div>
                 <div class="price-title">⚡ Standard</div>
-                <div class="price-tag">""" + P_STANDARD + """</div>
+                <div class="price-tag">{P_STANDARD}</div>
                 <div class="price-desc">API Fulfillment<br>Window Envelope<br>Mailed in 24hrs</div>
             </div>
         </div>
 
-        <div class="price-card" style="border: 2px solid #4CAF50; background-color: #f0fff4;">
+        <div class="price-card heirloom">
             <div>
                 <div class="price-title">🏺 Heirloom</div>
-                <div class="price-tag">""" + P_HEIRLOOM + """</div>
+                <div class="price-tag">{P_HEIRLOOM}</div>
                 <div class="price-desc">Hand-Stamped<br>Premium Paper<br>Mailed from Nashville</div>
             </div>
         </div>
@@ -87,13 +97,12 @@ def show_splash():
         <div class="price-card">
             <div>
                 <div class="price-title">🏛️ Civic Blast</div>
-                <div class="price-tag">""" + P_CIVIC + """</div>
+                <div class="price-tag">{P_CIVIC}</div>
                 <div class="price-desc">Activism Mode<br>Auto-Find Reps<br>Mails Senate + House</div>
             </div>
         </div>
     </div>
-    """
-    st.markdown(html_pricing, unsafe_allow_html=True) 
+    """, unsafe_allow_html=True)
 
     st.divider()
 
