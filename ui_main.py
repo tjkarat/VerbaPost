@@ -47,10 +47,19 @@ def reset_app():
     st.rerun()
 
 def show_main_app():
-    # --- 0. AUTO-DETECT RETURN FROM STRIPE ---
-    if "session_id" in st.query_params:
-        session_id = st.query_params["session_id"]
-        # Only check if we haven't processed this ID yet
+    # --- 0. URL STATE REHYDRATION (THE FIX) ---
+    # If returning from Stripe, grab address from URL and save to Session State
+    qp = st.query_params
+    if "session_id" in qp:
+        # Restore Address Data
+        keys_to_restore = ["to_name", "to_street", "to_city", "to_state", "to_zip", 
+                           "from_name", "from_street", "from_city", "from_state", "from_zip"]
+        for key in keys_to_restore:
+            if key in qp:
+                st.session_state[key] = qp[key]
+
+        # Verify Payment
+        session_id = qp["session_id"]
         if session_id not in st.session_state.get("processed_ids", []):
             if payment_engine.check_payment_status(session_id):
                 st.session_state.payment_complete = True
@@ -58,15 +67,14 @@ def show_main_app():
                     st.session_state.processed_ids = []
                 st.session_state.processed_ids.append(session_id)
                 st.toast("✅ Payment Confirmed! Recorder Unlocked.")
-                st.query_params.clear() 
+                # We do NOT clear query params here, or the address will vanish again!
+                # We clear them only after the letter is sent.
             else:
                 st.error("Payment verification failed.")
 
     # --- INIT STATE ---
     if "app_mode" not in st.session_state: st.session_state.app_mode = "recording"
     if "audio_path" not in st.session_state: st.session_state.audio_path = None
-    if "transcribed_text" not in st.session_state: st.session_state.transcribed_text = ""
-    if "overage_agreed" not in st.session_state: st.session_state.overage_agreed = False
     if "payment_complete" not in st.session_state: st.session_state.payment_complete = False
     
     # --- SIDEBAR RESET ---
@@ -79,7 +87,9 @@ def show_main_app():
     st.subheader("1. Addressing")
     col_to, col_from = st.tabs(["👉 Recipient", "👈 Sender"])
 
-    def get_val(key): return st.session_state.get(key, st.query_params.get(key, ""))
+    # Helper to prioritize Session State (Restored) -> URL -> Empty
+    def get_val(key): 
+        return st.session_state.get(key, st.query_params.get(key, ""))
 
     with col_to:
         to_name = st.text_input("Recipient Name", value=get_val("to_name"), key="to_name")
@@ -123,7 +133,7 @@ def show_main_app():
     st.subheader("3. Sign")
     canvas_result = st_canvas(
         fill_color="rgba(255, 165, 0, 0.3)", stroke_width=2, stroke_color="#000", background_color="#fff",
-        height=200, width=350, drawing_mode="freedraw", key="sig"
+        height=100, width=200, drawing_mode="freedraw", key="sig"
     )
 
     st.divider()
@@ -141,6 +151,7 @@ def show_main_app():
         st.subheader("4. Payment")
         st.info(f"Total: **${final_price:.2f}**")
         
+        # BUILD RETURN URL (PACKING DATA)
         params = {
             "to_name": to_name, "to_street": to_street, "to_city": to_city, "to_state": to_state, "to_zip": to_zip,
             "from_name": from_name, "from_street": from_street, "from_city": from_city, "from_state": from_state, "from_zip": from_zip
@@ -229,6 +240,7 @@ def show_main_app():
         st.subheader("📝 Review")
         st.audio(st.session_state.audio_path)
         edited_text = st.text_area("Edit Text:", value=st.session_state.transcribed_text, height=300)
+        
         c1, c2 = st.columns([1, 3])
         if c1.button("✨ AI Polish"):
              st.session_state.transcribed_text = ai_engine.polish_text(edited_text)
@@ -236,6 +248,7 @@ def show_main_app():
         if c2.button("🗑️ Re-Record (Free)"):
              st.session_state.app_mode = "recording"
              st.rerun()
+
         st.markdown("---")
         if st.button("🚀 Approve & Send Now", type="primary", use_container_width=True):
             st.session_state.transcribed_text = edited_text
@@ -267,7 +280,7 @@ def show_main_app():
 
                 if not targets:
                     status.update(label="❌ Error: Address Lookup Failed", state="error")
-                    st.error("Could not find representatives. Please check your address.")
+                    st.error("Could not find representatives.")
                     if st.button("Edit Address"):
                         st.session_state.app_mode = "recording"
                         st.rerun()
@@ -331,6 +344,9 @@ def show_main_app():
                 try:
                     database.update_user_address(st.session_state.user.user.email, from_name, from_street, from_city, from_state, from_zip)
                 except: pass
+            
+            # NOW WE CAN CLEAR PARAMS
+            st.query_params.clear()
 
         if st.button("Start New"):
             reset_app()
