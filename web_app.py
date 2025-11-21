@@ -1,5 +1,4 @@
 import streamlit as st
-# NEW IMPORTS
 from ui_splash import show_splash
 from ui_main import show_main_app
 from ui_login import show_login
@@ -21,7 +20,6 @@ def inject_custom_css():
         """, unsafe_allow_html=True)
 inject_custom_css()
 
-# --- HANDLERS ---
 def handle_login(email, password):
     user, error = auth_engine.sign_in(email, password)
     if error:
@@ -51,7 +49,6 @@ def handle_signup(email, password, name, street, city, state, zip_code):
         st.session_state.current_view = "main_app"
         st.rerun()
 
-# --- ROUTER ---
 if "session_id" in st.query_params:
     if payment_engine.check_payment_status(st.query_params["session_id"]):
         st.session_state.current_view = "main_app"
