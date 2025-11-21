@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker, joinedload # <--- NEW IMPORT
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker, joinedload
 from datetime import datetime
 import streamlit as st
 from sqlalchemy.engine import Engine
@@ -33,13 +33,11 @@ class Letter(Base):
     content = Column(Text, nullable=True)
     status = Column(String, default="Draft") 
     created_at = Column(DateTime, default=datetime.utcnow)
-    
     recipient_name = Column(String, nullable=True)
     recipient_street = Column(String, nullable=True)
     recipient_city = Column(String, nullable=True)
     recipient_state = Column(String, nullable=True)
     recipient_zip = Column(String, nullable=True)
-    
     user_id = Column(Integer, ForeignKey('users.id'))
     author = relationship("User", back_populates="letters")
 
@@ -93,7 +91,7 @@ def save_draft(email, r_name, r_street, r_city, r_state, r_zip):
             
         draft = Letter(
             author=user,
-            status="Pending Payment",
+            status="Draft", # Initial status
             recipient_name=r_name,
             recipient_street=r_street,
             recipient_city=r_city,
@@ -117,26 +115,31 @@ def get_letter(letter_id):
     session.close()
     return letter
 
-# --- ADMIN FUNCTIONS (FIXED) ---
-def get_pending_heirloom_letters():
+# --- ADMIN & STATUS FUNCTIONS ---
+
+def update_letter_status(letter_id, new_status, content=None):
     session = get_session()
     try:
-        # Eager load the 'author' relationship so it's available after session closes
-        letters = session.query(Letter).options(joinedload(Letter.author)).order_by(Letter.created_at.desc()).limit(50).all()
-        
-        # Detach objects from session so they can be used in Streamlit UI safely
-        session.expunge_all()
-        return letters
+        letter = session.query(Letter).filter_by(id=letter_id).first()
+        if letter:
+            letter.status = new_status
+            if content:
+                letter.content = content
+            session.commit()
     finally:
         session.close()
 
-def mark_as_sent(letter_id):
+def get_admin_queue():
+    """Fetches all letters that are Paid/Queued but not Sent."""
     session = get_session()
-    letter = session.query(Letter).filter_by(id=letter_id).first()
-    if letter:
-        letter.status = "Sent"
-        session.commit()
-    session.close()
+    try:
+        # We grab letters marked 'Queued' (Heirloom)
+        # We use joinedload to get the User email too
+        letters = session.query(Letter).options(joinedload(Letter.author)).filter(Letter.status == 'Queued').order_by(Letter.created_at.desc()).all()
+        session.expunge_all() # Detach from session so we can use in UI
+        return letters
+    finally:
+        session.close()
 
 if __name__ == "__main__":
     init_db()
