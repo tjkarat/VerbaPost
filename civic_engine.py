@@ -10,19 +10,17 @@ except:
 
 def get_reps(address):
     # 1. Sanity Check
-    if not address or len(address.strip()) < 5:
-        st.error("❌ Address Error: Address is too short or empty.")
+    if not address or len(address.strip()) < 10:
+        st.error(f"❌ Address Error: The address is too short: '{address}'")
         return []
 
     if not API_KEY:
         st.error("❌ Configuration Error: Google Civic API Key is missing.")
         return []
 
-    # 2. The Official Endpoint (v2)
+    # 2. The Official Endpoint
     base_url = "https://www.googleapis.com/civicinfo/v2/representatives"
     
-    # 3. Correct Parameter Structure
-    # We use a list for 'roles' so 'requests' formats it as &roles=...&roles=...
     params = {
         'key': API_KEY,
         'address': address,
@@ -31,41 +29,38 @@ def get_reps(address):
     }
 
     try:
-        # DEBUG: Print the sanitized URL (without key) to logs
-        safe_address = urllib.parse.quote(address)
-        print(f"🔍 Calling Google Civic for: {safe_address}")
+        # Debug: Print sanitized address to logs
+        print(f"🔍 Calling Google Civic for: {address}")
 
         r = requests.get(base_url, params=params)
         
-        # 4. Detailed Error Handling
+        # 3. Handle HTTP Errors
         if r.status_code != 200:
             try:
-                error_data = r.json()
-                error_msg = error_data['error']['message']
-                code = error_data['error']['code']
+                err_json = r.json()
+                error_msg = err_json['error']['message']
+                code = err_json['error']['code']
             except:
                 error_msg = r.text
                 code = r.status_code
-                
+            
             st.error(f"❌ Google API Error ({code}): {error_msg}")
             
+            if code == 400:
+                st.info("👉 Tip: The address format was rejected. Try entering it exactly as it appears on a utility bill.")
             if code == 403:
-                st.info("👉 Tip: Check Google Cloud Console -> APIs & Services. Ensure 'Civic Information API' is ENABLED.")
-            if code == 404:
-                st.info("👉 Tip: 404 usually means the Address format was rejected.")
+                st.info("👉 Tip: Go to Google Cloud Console and ENABLE 'Civic Information API'.")
             return []
 
-        # 5. Success Processing
         data = r.json()
         targets = []
 
         if 'offices' not in data:
-            st.warning("⚠️ Google found the address, but listed no representatives.")
+            st.warning("⚠️ Google found the location, but no representatives are listed.")
             return []
 
         for office in data.get('offices', []):
             name_lower = office['name'].lower()
-            
             # Filter for Federal Congress
             if "senate" in name_lower or "senator" in name_lower or "representative" in name_lower:
                 for index in office['officialIndices']:
