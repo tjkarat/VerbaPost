@@ -21,7 +21,7 @@ def show_splash():
 
     st.divider()
 
-    # --- PRICING (Native Containers - Bulletproof) ---
+    # --- PRICING TIERS (Fail-Safe Text Version) ---
     st.subheader("Simple Pricing")
     
     p1, p2, p3 = st.columns(3)
@@ -29,19 +29,19 @@ def show_splash():
     with p1:
         with st.container(border=True):
             st.markdown("### ⚡ Standard")
-            st.metric(label="Price", value=".99", label_visibility="collapsed")
+            st.markdown("## .99") # Pure Markdown - Cannot Break
             st.caption("API Fulfillment • Window Envelope • Mailed in 24hrs")
 
     with p2:
         with st.container(border=True):
             st.markdown("### 🏺 Heirloom")
-            st.metric(label="Price", value=".99", label_visibility="collapsed")
+            st.markdown("## .99")
             st.caption("Hand-Stamped • Premium Paper • Mailed from Nashville")
 
     with p3:
         with st.container(border=True):
             st.markdown("### 🏛️ Civic Blast")
-            st.metric(label="Price", value=".99", label_visibility="collapsed")
+            st.markdown("## .99")
             st.caption("Activism Mode • Auto-Find Reps • Mails Senate + House")
 
     st.divider()
