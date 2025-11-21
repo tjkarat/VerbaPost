@@ -1,5 +1,6 @@
 import requests
 import streamlit as st
+import urllib.parse
 
 # Load Key
 try:
@@ -8,13 +9,20 @@ except:
     API_KEY = None
 
 def get_reps(address):
-    if not API_KEY:
-        st.error("❌ Configuration Error: Google Civic API Key is missing in Secrets.")
+    # 1. Sanity Check
+    if not address or len(address.strip()) < 5:
+        st.error("❌ Address Error: Address is too short or empty.")
         return []
 
-    # FIX: The definitive, correct endpoint for v2
-    url = "https://civicinfo.googleapis.com/civicinfo/v2/representatives"
+    if not API_KEY:
+        st.error("❌ Configuration Error: Google Civic API Key is missing.")
+        return []
+
+    # 2. The Official Endpoint (v2)
+    base_url = "https://www.googleapis.com/civicinfo/v2/representatives"
     
+    # 3. Correct Parameter Structure
+    # We use a list for 'roles' so 'requests' formats it as &roles=...&roles=...
     params = {
         'key': API_KEY,
         'address': address,
@@ -23,34 +31,47 @@ def get_reps(address):
     }
 
     try:
-        r = requests.get(url, params=params)
+        # DEBUG: Print the sanitized URL (without key) to logs
+        safe_address = urllib.parse.quote(address)
+        print(f"🔍 Calling Google Civic for: {safe_address}")
+
+        r = requests.get(base_url, params=params)
         
-        # Specific handling for 404 vs other errors
-        if r.status_code == 404:
-            st.error(f"❌ Google API Error (404): The API endpoint URL is wrong or the address format is invalid.")
-            return []
+        # 4. Detailed Error Handling
+        if r.status_code != 200:
+            try:
+                error_data = r.json()
+                error_msg = error_data['error']['message']
+                code = error_data['error']['code']
+            except:
+                error_msg = r.text
+                code = r.status_code
+                
+            st.error(f"❌ Google API Error ({code}): {error_msg}")
             
-        data = r.json()
-        
-        if "error" in data:
-            err_content = data['error']
-            msg = err_content.get('message', str(err_content)) if isinstance(err_content, dict) else str(err_content)
-            st.error(f"❌ Google API Error: {msg}")
+            if code == 403:
+                st.info("👉 Tip: Check Google Cloud Console -> APIs & Services. Ensure 'Civic Information API' is ENABLED.")
+            if code == 404:
+                st.info("👉 Tip: 404 usually means the Address format was rejected.")
             return []
 
+        # 5. Success Processing
+        data = r.json()
         targets = []
-        
+
         if 'offices' not in data:
-            st.warning(f"⚠️ No representatives found. Google couldn't match this address to a district.")
+            st.warning("⚠️ Google found the address, but listed no representatives.")
             return []
 
         for office in data.get('offices', []):
             name_lower = office['name'].lower()
+            
+            # Filter for Federal Congress
             if "senate" in name_lower or "senator" in name_lower or "representative" in name_lower:
                 for index in office['officialIndices']:
                     official = data['officials'][index]
                     
-                    # Parse Address
+                    # Parse Address (Handle missing/hidden addresses)
                     addr_list = official.get('address', [])
                     if not addr_list:
                         clean_address = {
