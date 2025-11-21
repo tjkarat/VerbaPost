@@ -19,15 +19,10 @@ def transcribe_audio(filename):
     return result["text"]
 
 def polish_text(text):
-    """
-    Basic AI Cleanup.
-    """
     fillers = ["um", "uh", "ah", "like, you know", "you know"]
     polished = text
     for filler in fillers:
         pattern = re.compile(re.escape(filler), re.IGNORECASE)
         polished = pattern.sub("", polished)
-    
-    # Cleanup whitespace
     polished = " ".join(polished.split())
     return polished

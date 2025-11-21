@@ -8,7 +8,7 @@ import io
 import zipfile
 
 # Import core logic
-import voice_processor 
+import ai_engine  # <--- CORRECTED IMPORT
 import database
 import letter_format
 import mailer
@@ -47,23 +47,15 @@ def reset_app():
     st.rerun()
 
 def show_main_app():
-    # --- 0. AUTO-DETECT RETURN FROM STRIPE (SMART CHECK) ---
-    if "processed_ids" not in st.session_state:
-        st.session_state.processed_ids = []
-
+    # --- 0. AUTO-DETECT RETURN FROM STRIPE ---
     if "session_id" in st.query_params:
         session_id = st.query_params["session_id"]
-        
-        # ONLY process if we haven't seen this ID before
-        if session_id not in st.session_state.processed_ids:
-            if payment_engine.check_payment_status(session_id):
-                st.session_state.payment_complete = True
-                st.session_state.processed_ids.append(session_id) # MARK AS USED
-                st.toast("✅ Payment Confirmed! Recorder Unlocked.")
-                st.query_params.clear() 
-            else:
-                st.error("Payment verification failed.")
-        # If it IS in processed_ids, we do nothing (keep payment_complete as False for new letter)
+        if payment_engine.check_payment_status(session_id):
+            st.session_state.payment_complete = True
+            st.toast("✅ Payment Confirmed! Recorder Unlocked.")
+            st.query_params.clear() 
+        else:
+            st.error("Payment verification failed.")
 
     # --- INIT STATE ---
     if "app_mode" not in st.session_state:
@@ -105,7 +97,7 @@ def show_main_app():
         from_state = c3.text_input("Your State", value=get_val("from_state"), max_chars=2, key="from_state")
         from_zip = c4.text_input("Your Zip", value=get_val("from_zip"), max_chars=5, key="from_zip")
 
-    # Validation
+    # Validation Logic
     service_tier = st.radio("Service Level:", 
         [f"⚡ Standard (${COST_STANDARD})", f"🏺 Heirloom (${COST_HEIRLOOM})", f"🏛️ Civic (${COST_CIVIC})"],
         key="tier_select"
@@ -221,7 +213,7 @@ def show_main_app():
     elif st.session_state.app_mode == "transcribing":
         with st.spinner("🧠 AI is writing your letter..."):
             try:
-                text = voice_processor.transcribe_audio(st.session_state.audio_path)
+                text = ai_engine.transcribe_audio(st.session_state.audio_path)
                 st.session_state.transcribed_text = text
                 st.session_state.app_mode = "editing"
                 st.rerun()
@@ -239,7 +231,7 @@ def show_main_app():
         edited_text = st.text_area("Edit Text:", value=st.session_state.transcribed_text, height=300)
         c1, c2 = st.columns([1, 3])
         if c1.button("✨ AI Polish"):
-             st.session_state.transcribed_text = voice_processor.polish_text(edited_text)
+             st.session_state.transcribed_text = ai_engine.polish_text(edited_text)
              st.rerun()
         if c2.button("🗑️ Re-Record (Free)"):
              st.session_state.app_mode = "recording"
@@ -269,8 +261,7 @@ def show_main_app():
                 targets = civic_engine.get_reps(full_user_address)
                 
                 if not targets:
-                    st.error("❌ Could not find representatives.")
-                    st.caption("Try simplifying your address or checking the Zip Code.")
+                    st.error("❌ Could not find representatives. Please check your address.")
                     if st.button("Edit Address"):
                         st.session_state.app_mode = "recording"
                         st.rerun()
