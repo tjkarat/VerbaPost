@@ -1,10 +1,12 @@
 import streamlit as st
-from splash_view import show_splash
+# CHANGED IMPORT:
+from view_splash import show_splash
 from main_app_view import show_main_app
 from login_view import show_login
 import auth_engine 
 import database 
 import urllib.parse
+import payment_engine
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="VerbaPost", page_icon="📮", layout="centered")
@@ -24,7 +26,7 @@ def inject_custom_css():
 
 inject_custom_css()
 
-# --- HANDLER FUNCTIONS (Defined Here to Pass to Login View) ---
+# --- HANDLER FUNCTIONS ---
 def handle_login(email, password):
     user, error = auth_engine.sign_in(email, password)
     if error:
@@ -72,7 +74,6 @@ if st.session_state.current_view == "splash":
     show_splash()
 
 elif st.session_state.current_view == "login":
-    # FIX: CALLING WITH CORRECT ARGUMENTS
     show_login(handle_login, handle_signup)
 
 elif st.session_state.current_view == "main_app":
@@ -82,6 +83,6 @@ elif st.session_state.current_view == "main_app":
             st.session_state.current_view = "splash"
             st.rerun()
         if st.session_state.user:
-            st.caption(f"Logged in: {st.session_state.user.user.email}")
+            st.caption(f"Logged in: {st.session_state.user_email}")
         
     show_main_app()
