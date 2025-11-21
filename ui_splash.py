@@ -1,6 +1,6 @@
 import streamlit as st
 
-# Version 10.1 - Fixed f-string CSS Syntax
+# Version 10.2 - Fixed f-string CSS Syntax (Double Braces)
 def show_splash():
     # --- CONFIG ---
     P_STANDARD = "2.99"
@@ -31,7 +31,7 @@ def show_splash():
     # --- PRICING TIERS ---
     st.subheader("Simple Pricing")
     
-    # FIXED: All CSS curly braces are doubled {{ }} to escape them in the f-string
+    # FIXED: CSS brackets are now {{ }} to escape them in the f-string
     html_pricing = f"""
     <style>
         .price-card {{
