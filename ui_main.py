@@ -6,6 +6,7 @@ from datetime import datetime
 import urllib.parse
 import io
 import zipfile
+import re
 
 # Import core logic
 import ai_engine 
@@ -32,10 +33,12 @@ def validate_zip(zipcode, state):
     return True, "Valid"
 
 def reset_app():
+    # Full wipe
     keys = ["audio_path", "transcribed_text", "overage_agreed", "payment_complete", "stripe_url", "last_config", "processed_ids", "locked_tier", "sig_data"]
     for k in keys:
         if k in st.session_state: del st.session_state[k]
     
+    # Clear address keys
     addr_keys = ["to_name", "to_street", "to_city", "to_state", "to_zip", "from_name", "from_street", "from_city", "from_state", "from_zip"]
     for k in addr_keys:
         if k in st.session_state: del st.session_state[k]
@@ -44,7 +47,7 @@ def reset_app():
     st.rerun()
 
 def show_main_app():
-    # --- 0. AUTO-DETECT PAYMENT RETURN ---
+    # --- 0. AUTO-DETECT RETURN FROM STRIPE ---
     qp = st.query_params
     if "session_id" in qp:
         session_id = qp["session_id"]
@@ -61,7 +64,6 @@ def show_main_app():
             else:
                 st.error("Payment verification failed.")
         
-        # Restore Address Data from URL (if present)
         keys_to_restore = ["to_name", "to_street", "to_city", "to_state", "to_zip", 
                            "from_name", "from_street", "from_city", "from_state", "from_zip"]
         for key in keys_to_restore:
@@ -71,6 +73,7 @@ def show_main_app():
 
     # --- INIT STATE ---
     if "app_mode" not in st.session_state: st.session_state.app_mode = "store"
+    if "audio_path" not in st.session_state: st.session_state.audio_path = None
     if "payment_complete" not in st.session_state: st.session_state.payment_complete = False
     if "sig_data" not in st.session_state: st.session_state.sig_data = None 
 
@@ -87,7 +90,7 @@ def show_main_app():
         st.header("1. Select Service")
         
         service_tier = st.radio("Choose your letter type:", 
-            [f"⚡ Standard (${COST_STANDARD})", f"🏺 Heirloom (${COST_HEIRLOOM})", f"🏛️ Civic (${COST_CIVIC})"],
+            [f"⚡ Standard ()", f"🏺 Heirloom ()", f"🏛️ Civic ()"],
             index=0, key="tier_select"
         )
         
@@ -95,14 +98,12 @@ def show_main_app():
         elif "Heirloom" in service_tier: price = COST_HEIRLOOM; tier_name = "Heirloom"
         elif "Civic" in service_tier: price = COST_CIVIC; tier_name = "Civic"
         
-        st.info(f"**Total: ${price}**")
+        st.info(f"**Total: **")
         
-        # PAYMENT GENERATION
         current_config = f"{service_tier}_{price}"
         if "stripe_url" not in st.session_state or st.session_state.get("last_config") != current_config:
              success_link = f"{YOUR_APP_URL}?tier={tier_name}"
              
-             # Create Draft to get ID
              user_email = st.session_state.get("user_email", "guest@verbapost.com")
              draft_id = database.save_draft(user_email, "", "", "", "", "")
              
@@ -116,14 +117,8 @@ def show_main_app():
                  st.session_state.last_config = current_config
              
         if st.session_state.stripe_url:
-            # RESTORED WARNING TEXT
-            st.warning("""
-            ⚠️ **Security Notice:** Payment will open in a **New Tab**.
-            
-            After paying, you will be automatically redirected to your **Writing Desk** in that new tab. 
-            (You can close this tab once the new one opens).
-            """)
-            st.link_button(f"💳 Pay ${price} & Start Writing", st.session_state.stripe_url, type="primary")
+            st.error("⚠️ **NOTE:** Payment will open in a **New Tab**. You will return here automatically.")
+            st.link_button(f"💳 Pay  & Start Writing", st.session_state.stripe_url, type="primary")
         else:
             st.error("System Error: Payment link could not be generated.")
 
@@ -137,10 +132,9 @@ def show_main_app():
 
         st.success(f"🔓 **{locked_tier}** Unlocked. Ready to write.")
 
-        # --- 1. ADDRESSING (FORM FIX) ---
+        # --- 1. ADDRESSING ---
         st.subheader("1. Addressing")
         
-        # Wrapping in form solves the autocomplete "Hit Enter" issue
         with st.form("address_form"):
             col_to, col_from = st.tabs(["👉 Recipient", "👈 Sender"])
 
@@ -166,7 +160,6 @@ def show_main_app():
                 from_state = c3.text_input("Your State", value=get_val("from_state"))
                 from_zip = c4.text_input("Your Zip", value=get_val("from_zip"))
             
-            # This button captures all fields at once
             save_btn = st.form_submit_button("💾 Save Addresses")
 
         if save_btn:
@@ -180,9 +173,9 @@ def show_main_app():
             st.session_state.from_city = from_city
             st.session_state.from_state = from_state
             st.session_state.from_zip = from_zip
-            st.success("Addresses Saved!")
+            st.toast("Addresses Saved!")
 
-        # --- SIGNATURE ---
+        # --- 2. SIGNATURE ---
         st.divider()
         st.subheader("2. Sign")
         canvas_result = st_canvas(
@@ -192,33 +185,22 @@ def show_main_app():
         if canvas_result.image_data is not None:
             st.session_state.sig_data = canvas_result.image_data
 
-        # --- RECORDER ---
+        # --- 3. RECORDER ---
         st.divider()
         st.subheader("3. Dictate")
         
-        st.markdown("""
-        <div style="background-color:#e8fdf5; padding:15px; border-radius:10px; border:1px solid #c3e6cb; margin-bottom:10px;">
-            <h4 style="margin-top:0; color:#155724;">👇 How to Record</h4>
-            <ol style="color:#155724; margin-bottom:0;">
-                <li>Tap the <b>Microphone Icon</b> below.</li>
-                <li>Speak your letter clearly.</li>
-                <li>Tap the <b>Red Square</b> to stop.</li>
-            </ol>
-        </div>
-        """, unsafe_allow_html=True)
+        st.info("👇 **How to Record:** Tap the microphone icon. Speak clearly. Tap again to stop.")
         
         audio_value = st.audio_input("Record your letter")
         
-        # Strict Gate: User MUST verify addresses before recording
-        # We check session state because that's where the Form saves data
         valid_sender = st.session_state.get("from_name") and st.session_state.get("from_street")
         valid_recipient = st.session_state.get("to_name") and st.session_state.get("to_street")
 
         if is_civic and not valid_sender:
-            st.warning("⚠️ Please click **'Save Addresses'** above before recording.")
+            st.warning("⚠️ Please click **'Save Addresses'** above.")
             st.stop()
         if not is_civic and not (valid_recipient and valid_sender):
-            st.warning("⚠️ Please click **'Save Addresses'** above before recording.")
+            st.warning("⚠️ Please click **'Save Addresses'** above.")
             st.stop()
 
         if audio_value:
@@ -258,7 +240,6 @@ def show_main_app():
         is_civic = "Civic" in locked_tier
         is_heirloom = "Heirloom" in locked_tier
         
-        # Load from Session State
         to_n = st.session_state.get("to_name", "")
         to_s = st.session_state.get("to_street", "")
         to_c = st.session_state.get("to_city", "")
@@ -280,14 +261,20 @@ def show_main_app():
             except: pass
 
         with st.status("Sending...", expanded=True):
+            
+            # --- DYNAMIC FILENAME LOGIC ---
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            # Remove special chars from name for filename safety
+            safe_name = re.sub(r'[^a-zA-Z0-9]', '', to_n)
+            if not safe_name: safe_name = "Recipient"
+            
+            filename_pdf = f"VerbaPost_{safe_name}_{today_str}.pdf"
+
             if is_civic:
                 full_addr = f"{fr_s}, {fr_c}, {fr_st} {fr_z}"
                 try: targets = civic_engine.get_reps(full_addr)
                 except: targets = []
-                
-                if not targets:
-                    st.error("No Reps Found.")
-                    st.stop()
+                if not targets: st.error("No Reps Found."); st.stop()
                 
                 files = []
                 addr_from = {'name': fr_n, 'address_line1': fr_s, 'address_city': fr_c, 'address_state': fr_st, 'address_zip': fr_z}
@@ -295,21 +282,24 @@ def show_main_app():
                     t_addr = t['address_obj']
                     t_lob = {'name': t['name'], 'address_line1': t_addr['street'], 'address_city': t_addr['city'], 'address_state': t_addr['state'], 'address_zip': t_addr['zip']}
                     
-                    pdf = letter_format.create_pdf(st.session_state.transcribed_text, f"{t['name']}\n{t_addr['street']}", f"{fr_n}\n{fr_s}...", False, "English", f"{t['name']}.pdf", sig_path)
+                    # Custom name for each Rep
+                    rep_filename = f"VerbaPost_{t['name'].replace(' ', '_')}_{today_str}.pdf"
+                    
+                    pdf = letter_format.create_pdf(st.session_state.transcribed_text, f"{t['name']}\n{t_addr['street']}", f"{fr_n}\n{fr_s}...", False, "English", rep_filename, sig_path)
                     files.append(pdf)
                     mailer.send_letter(pdf, t_lob, addr_from)
                 
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, "w") as zf:
                     for f in files: zf.write(f, os.path.basename(f))
-                st.download_button("📦 Download All", zip_buffer.getvalue(), "Civic.zip")
+                st.download_button("📦 Download All", zip_buffer.getvalue(), f"VerbaPost_Civic_{today_str}.zip")
             
             else:
                 pdf = letter_format.create_pdf(
                     st.session_state.transcribed_text, 
                     f"{to_n}\n{to_s}\n{to_c}, {to_st} {to_z}", 
                     f"{fr_n}\n{fr_s}\n{fr_c}, {fr_st} {fr_z}", 
-                    is_heirloom, "English", "final.pdf", sig_path
+                    is_heirloom, "English", filename_pdf, sig_path
                 )
                 
                 if not is_heirloom:
@@ -321,12 +311,12 @@ def show_main_app():
                          database.update_letter_status(st.query_params["letter_id"], "Queued", st.session_state.transcribed_text)
 
                 with open(pdf, "rb") as f:
-                    st.download_button("Download Copy", f, "letter.pdf")
+                    st.download_button("Download Copy", f, filename_pdf)
 
             st.write("✅ Done!")
-            st.success("Sent!")
             
             if st.session_state.get("user"):
                  database.update_user_address(st.session_state.user.user.email, fr_n, fr_s, fr_c, fr_st, fr_z)
 
+        st.success("Sent!")
         if st.button("Start New"): reset_app()
