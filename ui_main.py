@@ -120,4 +120,167 @@ def show_main_app():
 
     if is_civic:
         if not valid_sender:
-            st.warning("⚠️ Please fill
+            st.warning("⚠️ Please fill out the **Sender** tab.")
+            st.stop()
+    else:
+        if not (valid_recipient and valid_sender):
+            st.info("👇 Please fill out **Recipient** and **Sender** tabs.")
+            st.stop()
+
+    # Signature (ALWAYS Rendered so variable exists)
+    st.divider()
+    st.subheader("3. Sign")
+    canvas_result = st_canvas(
+        fill_color="rgba(255, 165, 0, 0.3)", stroke_width=2, stroke_color="#000", background_color="#fff",
+        height=200, width=350, drawing_mode="freedraw", key="sig"
+    )
+
+    # ==========================================
+    #  SECTION 2: PAYMENT GATE (BLOCKS HERE)
+    # ==========================================
+    if is_heirloom: price = COST_HEIRLOOM
+    elif is_civic: price = COST_CIVIC
+    else: price = COST_STANDARD
+    
+    final_price = price + (COST_OVERAGE if st.session_state.get("overage_agreed", False) else 0.00)
+
+    if not st.session_state.payment_complete:
+        st.divider()
+        st.subheader("4. Payment")
+        st.info(f"Total: **${final_price:.2f}**")
+        
+        # Save Draft & Generate Link
+        user_email = st.session_state.get("user_email", "guest@verbapost.com")
+        
+        if st.button("💳 Proceed to Secure Payment", type="primary", use_container_width=True):
+            draft_id = database.save_draft(user_email, to_name, to_street, to_city, to_state, to_zip)
+            
+            if draft_id:
+                # Pack data into URL for return trip
+                params = {
+                    "to_name": to_name, "to_street": to_street, "to_city": to_city, "to_state": to_state, "to_zip": to_zip,
+                    "from_name": from_name, "from_street": from_street, "from_city": from_city, "from_state": from_state, "from_zip": from_zip,
+                    "tier": service_tier,
+                    "letter_id": draft_id
+                }
+                q_str = urllib.parse.urlencode(params)
+                success_url = f"{YOUR_APP_URL}?{q_str}"
+                
+                url, sess_id = payment_engine.create_checkout_session(
+                    f"VerbaPost {service_tier}", int(final_price * 100), success_url, YOUR_APP_URL
+                )
+                
+                if url:
+                    st.link_button("👉 Click to Pay (Opens Secure Tab)", url, type="primary")
+                    st.caption("After paying, you will be redirected back here to record your letter.")
+                else:
+                    st.error("Payment Error.")
+        st.stop() # Stop execution if not paid
+
+    # ==========================================
+    #  SECTION 3: WORKSPACE (UNLOCKED)
+    # ==========================================
+    st.divider()
+    
+    if st.session_state.app_mode == "recording":
+        st.subheader("🎙️ 5. Dictate")
+        st.markdown("""
+        <div style="background-color:#e8fdf5; padding:15px; border-radius:10px; border:1px solid #c3e6cb; margin-bottom:10px;">
+            <h4 style="margin-top:0; color:#155724;">👇 How to Record</h4>
+            <ol style="color:#155724; margin-bottom:0;">
+                <li>Tap the <b>Microphone Icon</b> below.</li>
+                <li>Speak your letter clearly.</li>
+                <li>Tap the <b>Red Square</b> to stop.</li>
+            </ol>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        audio_val = st.audio_input("Record")
+        if audio_val:
+            with st.status("Processing...", expanded=True):
+                path = "temp.wav"
+                with open(path, "wb") as f: f.write(audio_val.getvalue())
+                st.session_state.audio_path = path
+                st.session_state.app_mode = "transcribing"
+                st.rerun()
+
+    elif st.session_state.app_mode == "transcribing":
+        with st.spinner("Transcribing..."):
+            try:
+                text = ai_engine.transcribe_audio(st.session_state.audio_path)
+                st.session_state.transcribed_text = text
+                st.session_state.app_mode = "editing"
+                st.rerun()
+            except:
+                st.error("Transcription Error")
+                if st.button("Retry"): reset_app()
+
+    elif st.session_state.app_mode == "editing":
+        st.subheader("📝 Review")
+        edited = st.text_area("Body:", value=st.session_state.transcribed_text, height=300)
+        if st.button("🚀 Send Letter", type="primary"):
+            st.session_state.transcribed_text = edited
+            st.session_state.app_mode = "finalizing"
+            st.rerun()
+
+    elif st.session_state.app_mode == "finalizing":
+        with st.status("Sending...", expanded=True):
+            sig_path = None
+            if canvas_result.image_data is not None:
+                img = Image.fromarray(canvas_result.image_data.astype('uint8'), 'RGBA')
+                sig_path = "temp_signature.png"
+                img.save(sig_path)
+
+            # Civic vs Standard Logic
+            if is_civic:
+                full_addr = f"{from_street}, {from_city}, {from_state} {from_zip}"
+                try: targets = civic_engine.get_reps(full_addr)
+                except: targets = []
+                
+                if not targets:
+                    st.error("No Reps found.")
+                    st.stop()
+                
+                files = []
+                addr_from = {'name': from_name, 'street': from_street, 'city': from_city, 'state': from_state, 'zip': from_zip}
+                for t in targets:
+                    t_addr = t['address_obj']
+                    pdf = letter_format.create_pdf(st.session_state.transcribed_text, f"{t['name']}\n{t_addr['street']}", f"{from_name}\n{from_street}...", False, "English", f"{t['name']}.pdf", sig_path)
+                    files.append(pdf)
+                    t_lob = {'name': t['name'], 'street': t_addr['street'], 'city': t_addr['city'], 'state': t_addr['state'], 'zip': t_addr['zip']}
+                    mailer.send_letter(pdf, t_lob, addr_from)
+                
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w") as zf:
+                    for f in files: zf.write(f, os.path.basename(f))
+                st.download_button("📦 Download All", zip_buffer.getvalue(), "Civic.zip")
+            
+            else:
+                # Standard
+                pdf = letter_format.create_pdf(
+                    st.session_state.transcribed_text, 
+                    f"{to_name}\n{to_street}", 
+                    f"{from_name}\n{from_street}", 
+                    is_heirloom, "English", "final.pdf", sig_path
+                )
+                
+                if not is_heirloom:
+                     addr_to = {'name': to_name, 'street': to_street, 'city': to_city, 'state': to_state, 'zip': to_zip}
+                     addr_from = {'name': from_name, 'street': from_street, 'city': from_city, 'state': from_state, 'zip': from_zip}
+                     mailer.send_letter(pdf, addr_to, addr_from)
+                else:
+                     # Update status for Admin
+                     if "letter_id" in st.query_params:
+                         database.update_letter_status(st.query_params["letter_id"], "Queued", st.session_state.transcribed_text)
+
+                with open(pdf, "rb") as f:
+                    st.download_button("Download Copy", f, "letter.pdf")
+
+            st.write("✅ Done!")
+            st.success("Sent!")
+            
+            # Save Address
+            if st.session_state.get("user"):
+                 database.update_user_address(st.session_state.user.user.email, from_name, from_street, from_city, from_state, from_zip)
+
+        if st.button("Start New"): reset_app()
