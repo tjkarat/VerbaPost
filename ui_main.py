@@ -45,34 +45,30 @@ def reset_app():
     st.rerun()
 
 def show_main_app():
-    # --- 0. SAFETY CHECK: INITIALIZE SESSION STATE ---
-    defaults = {
-        "app_mode": "recording",
-        "audio_path": None,
-        "transcribed_text": "",
-        "overage_agreed": False,
-        "payment_complete": False,
-        "processed_ids": [],
-        "stripe_url": None,
-        "last_config": None
-    }
-    for key, val in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = val
-
-    # --- 1. AUTO-DETECT RETURN FROM STRIPE ---
-    if "session_id" in st.query_params:
-        session_id = st.query_params["session_id"]
-        if session_id not in st.session_state.processed_ids:
+    # --- 0. AUTO-DETECT RETURN FROM STRIPE (DATA REHYDRATION) ---
+    qp = st.query_params
+    
+    # If returning from Stripe, automatically load all URL params into session state
+    if "session_id" in qp:
+        session_id = qp["session_id"]
+        if session_id not in st.session_state.get("processed_ids", []):
             if payment_engine.check_payment_status(session_id):
                 st.session_state.payment_complete = True
-                if "processed_ids" not in st.session_state:
-                    st.session_state.processed_ids = []
+                if "processed_ids" not in st.session_state: st.session_state.processed_ids = []
                 st.session_state.processed_ids.append(session_id)
                 st.toast("✅ Payment Confirmed! Recorder Unlocked.")
-                st.query_params.clear() 
             else:
                 st.error("Payment verification failed.")
+
+        # Load address data from URL directly into session state for persistence
+        keys_to_restore = ["to_name", "to_street", "to_city", "to_state", "to_zip", 
+                           "from_name", "from_street", "from_city", "from_state", "from_zip"]
+        for key in keys_to_restore:
+            if key in qp:
+                st.session_state[key] = qp[key]
+        
+        # Clear the huge URL to prevent copy-paste errors
+        st.query_params.clear() 
 
     # --- INIT STATE ---
     if "app_mode" not in st.session_state: st.session_state.app_mode = "recording"
@@ -85,13 +81,15 @@ def show_main_app():
         if st.button("🔄 Start New Letter", type="primary", use_container_width=True):
             reset_app()
     
-    # --- 2. ADDRESSING ---
+    # --- 1. ADDRESSING (Now reads DIRECTLY from session state) ---
     st.subheader("1. Addressing")
     col_to, col_from = st.tabs(["👉 Recipient", "👈 Sender"])
 
-    def get_val(key): return st.session_state.get(key, st.query_params.get(key, ""))
+    # Helper to get value from session state
+    def get_val(key): return st.session_state.get(key, "")
 
     with col_to:
+        # Widgets are now initialized with session state values
         to_name = st.text_input("Recipient Name", value=get_val("to_name"), key="to_name")
         to_street = st.text_input("Street Address", value=get_val("to_street"), key="to_street")
         c1, c2 = st.columns(2)
@@ -115,25 +113,28 @@ def show_main_app():
     is_heirloom = "Heirloom" in service_tier
     is_civic = "Civic" in service_tier
 
+    valid_recipient = to_name and to_street and to_city and to_state and to_zip
+    valid_sender = from_name and from_street and from_city and from_state and from_zip
+
     if is_civic:
         st.info("🏛️ **Civic Mode:** We will find your reps based on your Return Address.")
-        if not (from_name and from_street and from_city and from_state and from_zip):
+        if not valid_sender:
              st.warning("👇 Please fill out the **Sender** tab.")
              return
     else:
-        if not (to_name and to_street and to_city and to_state and to_zip):
+        if not valid_recipient:
             st.info("👇 Fill out the **Recipient** tab to unlock the tools.")
             return
-        if not (from_name and from_street and from_city and from_state and from_zip):
+        if not valid_sender:
              st.warning("👇 Fill out the **Sender** tab.")
              return
 
     # --- 3. SIGNATURE ---
     st.divider()
-    st.subheader("3. Sign")
+    st.subheader("2. Sign")
     canvas_result = st_canvas(
         fill_color="rgba(255, 165, 0, 0.3)", stroke_width=2, stroke_color="#000", background_color="#fff",
-        height=100, width=200, drawing_mode="freedraw", key="sig"
+        height=150, width=300, drawing_mode="freedraw", key="sig"
     )
 
     st.divider()
@@ -142,17 +143,16 @@ def show_main_app():
     if is_heirloom: price = COST_HEIRLOOM
     elif is_civic: price = COST_CIVIC
     else: price = COST_STANDARD
-    
-    overage = COST_OVERAGE if st.session_state.get("overage_agreed", False) else 0.00
-    final_price = price + overage
+    final_price = price + (COST_OVERAGE if st.session_state.get("overage_agreed", False) else 0.00)
 
     # ==================================================
     #  PAYMENT GATE
     # ==================================================
     if not st.session_state.payment_complete:
-        st.subheader("4. Payment")
+        st.subheader("3. Payment")
         st.info(f"Total: **${final_price:.2f}**")
         
+        # Build URL for session state persistence
         params = {
             "to_name": to_name, "to_street": to_street, "to_city": to_city, "to_state": to_state, "to_zip": to_zip,
             "from_name": from_name, "from_street": from_street, "from_city": from_city, "from_state": from_state, "from_zip": from_zip
@@ -190,7 +190,7 @@ def show_main_app():
     #  STATE 1: RECORDING
     # ==================================================
     if st.session_state.app_mode == "recording":
-        st.subheader("🎙️ 5. Dictate")
+        st.subheader("🎙️ 4. Dictate")
         st.success("🔓 Payment Verified.")
         
         audio_value = st.audio_input("Record your letter")
@@ -270,14 +270,13 @@ def show_main_app():
             if is_civic:
                 st.write("🏛️ Finding your Representatives...")
                 full_user_address = f"{from_street}, {from_city}, {from_state} {from_zip}"
-                
                 try:
                     targets = civic_engine.get_reps(full_user_address)
                 except: targets = []
 
                 if not targets:
                     status.update(label="❌ Error: Address Lookup Failed", state="error")
-                    st.error("Could not find representatives.")
+                    st.error("Could not find representatives. Please check your address.")
                     if st.button("Edit Address"):
                         st.session_state.app_mode = "recording"
                         st.rerun()
