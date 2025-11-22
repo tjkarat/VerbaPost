@@ -1,26 +1,22 @@
 import streamlit as st
 import auth_engine 
 import payment_engine
-import database
 
-# 1. INTERCEPT STRIPE RETURN BEFORE ANYTHING ELSE
-# This must run first to capture the session_id before the app resets state
+# 1. INTERCEPT STRIPE RETURN
 qp = st.query_params
 if "session_id" in qp:
-    # Force view to main_app immediately
     if "current_view" not in st.session_state:
         st.session_state.current_view = "main_app"
 
-# 2. IMPORTS (After state logic to avoid circular issues)
+# 2. IMPORTS
 from ui_splash import show_splash
 from ui_main import show_main_app
 from ui_login import show_login
 from ui_admin import show_admin
 
-# 3. PAGE CONFIG
+# 3. CONFIG
 st.set_page_config(page_title="VerbaPost", page_icon="📮", layout="centered")
 
-# 4. CSS INJECTOR (Styling)
 def inject_custom_css():
     st.markdown("""
         <style>
@@ -34,7 +30,6 @@ def inject_custom_css():
         """, unsafe_allow_html=True)
 inject_custom_css()
 
-# 5. AUTH HANDLERS (Passed to Login View)
 def handle_login(email, password):
     user, error = auth_engine.sign_in(email, password)
     if error:
@@ -43,8 +38,6 @@ def handle_login(email, password):
         st.success("Welcome!")
         st.session_state.user = user
         st.session_state.user_email = email
-        
-        # Fetch saved address to auto-fill session
         try:
             saved = auth_engine.get_current_address(email)
             if saved:
@@ -53,9 +46,7 @@ def handle_login(email, password):
                 st.session_state["from_city"] = saved.get("city", "")
                 st.session_state["from_state"] = saved.get("state", "")
                 st.session_state["from_zip"] = saved.get("zip", "")
-        except:
-            pass
-            
+        except: pass
         st.session_state.current_view = "main_app"
         st.rerun()
 
@@ -70,44 +61,22 @@ def handle_signup(email, password, name, street, city, state, zip_code):
         st.session_state.current_view = "main_app"
         st.rerun()
 
-# 6. INITIALIZE DEFAULT STATE
 if "current_view" not in st.session_state:
     st.session_state.current_view = "splash" 
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# 7. ROUTER (View Controller)
 if st.session_state.current_view == "splash":
     show_splash()
-
 elif st.session_state.current_view == "login":
-    # Pass handlers to the view
     show_login(handle_login, handle_signup)
-
 elif st.session_state.current_view == "admin":
     show_admin()
-
 elif st.session_state.current_view == "main_app":
-    # Sidebar Navigation
     with st.sidebar:
-        if st.button("🏠 Home", use_container_width=True):
+        if st.button("🏠 Home"):
             st.session_state.current_view = "splash"
             st.rerun()
-        
         if st.session_state.get("user"):
             st.caption(f"User: {st.session_state.user_email}")
-            
-            # ADMIN BUTTON (Only visible to Admin Email)
-            # Change this email to match your login!
-            if st.session_state.user_email == "tjkarat@gmail.com": 
-                if st.button("🔐 Admin Panel", type="primary"):
-                    st.session_state.current_view = "admin"
-                    st.rerun()
-
-            if st.button("Log Out"):
-                # Clear session
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
-        
     show_main_app()
