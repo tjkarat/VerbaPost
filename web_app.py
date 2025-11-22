@@ -1,20 +1,11 @@
 import streamlit as st
-import auth_engine 
-import payment_engine
-
-# 1. INTERCEPT STRIPE RETURN
-qp = st.query_params
-if "session_id" in qp:
-    if "current_view" not in st.session_state:
-        st.session_state.current_view = "main_app"
-
-# 2. IMPORTS
 from ui_splash import show_splash
 from ui_main import show_main_app
 from ui_login import show_login
 from ui_admin import show_admin
+import auth_engine 
+import payment_engine
 
-# 3. CONFIG
 st.set_page_config(page_title="VerbaPost", page_icon="📮", layout="centered")
 
 def inject_custom_css():
@@ -30,53 +21,41 @@ def inject_custom_css():
         """, unsafe_allow_html=True)
 inject_custom_css()
 
-def handle_login(email, password):
-    user, error = auth_engine.sign_in(email, password)
-    if error:
-        st.error(f"Login Failed: {error}")
-    else:
-        st.success("Welcome!")
-        st.session_state.user = user
-        st.session_state.user_email = email
-        try:
-            saved = auth_engine.get_current_address(email)
-            if saved:
-                st.session_state["from_name"] = saved.get("name", "")
-                st.session_state["from_street"] = saved.get("street", "")
-                st.session_state["from_city"] = saved.get("city", "")
-                st.session_state["from_state"] = saved.get("state", "")
-                st.session_state["from_zip"] = saved.get("zip", "")
-        except: pass
-        st.session_state.current_view = "main_app"
-        st.rerun()
-
-def handle_signup(email, password, name, street, city, state, zip_code):
-    user, error = auth_engine.sign_up(email, password, name, street, city, state, zip_code)
-    if error:
-        st.error(f"Error: {error}")
-    else:
-        st.success("Created!")
-        st.session_state.user = user
-        st.session_state.user_email = email
-        st.session_state.current_view = "main_app"
-        st.rerun()
+# --- ROUTING ---
+if "session_id" in st.query_params:
+    st.session_state.current_view = "main_app"
 
 if "current_view" not in st.session_state:
     st.session_state.current_view = "splash" 
 if "user" not in st.session_state:
     st.session_state.user = None
 
+# --- VIEW CONTROLLER ---
 if st.session_state.current_view == "splash":
     show_splash()
 elif st.session_state.current_view == "login":
-    show_login(handle_login, handle_signup)
+    # Placeholder handlers for now since logic is inside views
+    show_login(lambda e,p: None, lambda e,p,n,s,c,st,z: None) 
 elif st.session_state.current_view == "admin":
     show_admin()
 elif st.session_state.current_view == "main_app":
     with st.sidebar:
-        if st.button("🏠 Home"):
+        if st.button("🏠 Home", use_container_width=True):
             st.session_state.current_view = "splash"
             st.rerun()
         if st.session_state.get("user"):
-            st.caption(f"User: {st.session_state.user_email}")
+            st.caption(f"User: {st.session_state.user.user.email}")
+            if st.session_state.user.user.email == "tjkarat@gmail.com": 
+                if st.button("🔐 Admin", type="primary"):
+                    st.session_state.current_view = "admin"
+                    st.rerun()
+            if st.button("Log Out"):
+                for k in list(st.session_state.keys()): del st.session_state[k]
+                st.rerun()
+
     show_main_app()
+
+# --- GLOBAL FOOTER ---
+with st.sidebar:
+    st.divider()
+    st.markdown("📧 **Help:** support@verbapost.com")
