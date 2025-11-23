@@ -7,29 +7,31 @@ import pandas as pd
 def show_admin():
     st.title("👮‍♂️ Admin Command")
     
-    # SECURITY: Load from Secrets
+    # 1. SECURITY: Load Admin Email from Secrets
     try:
         admin_email = st.secrets["admin"]["email"]
     except:
-        st.error("❌ Admin Email not configured in Secrets.")
+        st.error("❌ Admin Email not configured in Streamlit Secrets.")
+        st.info("Go to Settings > Secrets and add [admin] email = 'your@email.com'")
         st.stop()
     
-    # 1. Security Gate
-    if not st.session_state.get("user") or st.session_state.user_email != admin_email:
+    # 2. Security Gate
+    current_user_email = st.session_state.get("user_email") or ""
+    if not st.session_state.get("user") or current_user_email.lower() != admin_email.lower():
         st.error("⛔ Access Denied. Authorized Personnel Only.")
         if st.button("Back to Safety"):
             st.session_state.current_view = "splash"
             st.rerun()
         st.stop()
 
-    # 2. Fetch Data
+    # 3. Fetch Data
     try:
         queue = database.get_admin_queue()
     except Exception as e:
         st.error(f"Database Connection Error: {e}")
         return
 
-    # 3. Business Stats
+    # 4. Business Stats
     col1, col2, col3 = st.columns(3)
     
     pending_count = len(queue)
@@ -37,7 +39,7 @@ def show_admin():
     
     col1.metric("Pending Orders", pending_count, delta_color="inverse")
     col2.metric("Queue Value", f"${estimated_value:.2f}")
-    col3.button("🔄 Refresh Data", on_click=st.rerun)
+    col3.button("🔄 Refresh", on_click=st.rerun)
 
     st.divider()
     st.subheader("🗂️ Fulfillment Queue")
@@ -47,7 +49,7 @@ def show_admin():
         st.balloons()
         return
 
-    # 4. The Work List
+    # 5. The Work List
     for l in queue:
         with st.container(border=True):
             c1, c2 = st.columns([3, 1])
@@ -60,13 +62,13 @@ def show_admin():
 
             with c2:
                 # GENERATE PDF
-                s_str = f"{l.author.address_name}
-{l.author.address_street}
-{l.author.address_city}, {l.author.address_state}" if l.author else "VerbaPost User"
-                r_str = f"{l.recipient_name}
-{l.recipient_street}
-{l.recipient_city}, {l.recipient_state} {l.recipient_zip}"
+                s_name = l.author.address_name if l.author else "VerbaPost User"
+                s_addr = f"{l.author.address_street}\n{l.author.address_city}, {l.author.address_state}" if l.author else ""
                 
+                s_str = f"{s_name}\n{s_addr}"
+                r_str = f"{l.recipient_name}\n{l.recipient_street}\n{l.recipient_city}, {l.recipient_state} {l.recipient_zip}"
+                
+                # Generate filename
                 pdf_path = letter_format.create_pdf(
                     l.content, r_str, s_str, True, "English", f"order_{l.id}.pdf", None
                 )

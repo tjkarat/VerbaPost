@@ -10,3 +10,4 @@ sqlalchemy
 psycopg2-binary
 fpdf2
 zipcodes
+pandas
