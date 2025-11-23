@@ -31,7 +31,8 @@ def create_pdf(content, recipient_addr, return_addr, is_heirloom, language, file
     # 1. Ensure fonts exist locally
     ensure_fonts()
     
-    pdf = FPDF()
+    # FIXED: Force 'Letter' size (8.5x11) for Lob compatibility
+    pdf = FPDF(format='Letter')
     
     # 2. REGISTER FONTS (MUST BE BEFORE ADD_PAGE)
     # We use try/except blocks to prevent crashing if a font is corrupt
