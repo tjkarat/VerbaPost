@@ -25,13 +25,15 @@ class User(Base):
     address_city = Column(String, nullable=True)
     address_state = Column(String, nullable=True)
     address_zip = Column(String, nullable=True)
+    # NEW: Language Preference
+    language = Column(String, default="English")
     letters = relationship("Letter", back_populates="author")
 
 class Letter(Base):
     __tablename__ = 'letters'
     id = Column(Integer, primary_key=True)
     content = Column(Text, nullable=True)
-    status = Column(String, default="Draft") # Draft, Queued, Sent
+    status = Column(String, default="Draft") 
     created_at = Column(DateTime, default=datetime.utcnow)
     recipient_name = Column(String, nullable=True)
     recipient_street = Column(String, nullable=True)
@@ -57,14 +59,15 @@ def create_or_get_user(email):
     session = get_session()
     user = session.query(User).filter_by(email=email).first()
     if not user:
-        user = User(username=email, email=email)
+        user = User(username=email, email=email, language="English")
         session.add(user)
         session.commit()
         session.refresh(user)
     session.close()
     return user
 
-def update_user_address(email, name, street, city, state, zip_code):
+# UPDATED: Now saves language too
+def update_user_profile(email, name, street, city, state, zip_code, language="English"):
     session = get_session()
     try:
         user = session.query(User).filter_by(email=email).first()
@@ -74,11 +77,16 @@ def update_user_address(email, name, street, city, state, zip_code):
             user.address_city = city
             user.address_state = state
             user.address_zip = zip_code
+            user.language = language
             session.commit()
     except Exception as e:
         print(f"DB Error: {e}")
     finally:
         session.close()
+
+# Backwards compatibility wrapper
+def update_user_address(email, name, street, city, state, zip_code):
+    update_user_profile(email, name, street, city, state, zip_code)
 
 def save_draft(email, r_name, r_street, r_city, r_state, r_zip):
     session = get_session()
@@ -91,7 +99,7 @@ def save_draft(email, r_name, r_street, r_city, r_state, r_zip):
             
         draft = Letter(
             author=user,
-            status="Pending Payment",
+            status="Draft",
             recipient_name=r_name,
             recipient_street=r_street,
             recipient_city=r_city,
@@ -115,40 +123,9 @@ def get_letter(letter_id):
     session.close()
     return letter
 
-def get_last_pending_letter(user_email):
-    """Fetches the last letter waiting for content/status update."""
-    session = get_session()
-    try:
-        user = session.query(User).filter_by(email=user_email).first()
-        if user:
-            # Find the most recent letter that is not finalized
-            letter = session.query(Letter).filter_by(user_id=user.id).filter(Letter.status != 'Sent').order_by(Letter.created_at.desc()).first()
-            session.close()
-            return letter
-    except:
-        session.close()
-        return None
-    session.close()
-    return None
-
-# --- ADMIN & STATUS FUNCTIONS (UPDATED) ---
-def update_letter_status(letter_id, new_status, content=None):
-    session = get_session()
-    try:
-        letter = session.query(Letter).filter_by(id=letter_id).first()
-        if letter:
-            letter.status = new_status
-            if content:
-                letter.content = content
-            session.commit()
-    finally:
-        session.close()
-
 def get_admin_queue():
-    """Fetches all letters marked 'Queued' for manual printing."""
     session = get_session()
     try:
-        # Filter for letters that are ready for printing ('Queued')
         letters = session.query(Letter).options(joinedload(Letter.author)).filter(Letter.status == 'Queued').order_by(Letter.created_at.desc()).all()
         session.expunge_all() 
         return letters
@@ -161,6 +138,18 @@ def mark_as_sent(letter_id):
         letter = session.query(Letter).filter_by(id=letter_id).first()
         if letter:
             letter.status = "Sent"
+            session.commit()
+    finally:
+        session.close()
+        
+def update_letter_status(letter_id, new_status, content=None):
+    session = get_session()
+    try:
+        letter = session.query(Letter).filter_by(id=letter_id).first()
+        if letter:
+            letter.status = new_status
+            if content:
+                letter.content = content
             session.commit()
     finally:
         session.close()

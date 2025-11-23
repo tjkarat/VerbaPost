@@ -33,18 +33,16 @@ def validate_zip(zipcode, state):
     return True, "Valid"
 
 def reset_app():
-    # SOFT RESET: Don't delete keys, just reset values
-    # This prevents AttributeError if the app tries to read a key before re-init
+    # SOFT RESET
+    st.session_state.app_mode = "store"
     st.session_state.audio_path = None
     st.session_state.transcribed_text = ""
-    st.session_state.app_mode = "store" # Force back to store
     st.session_state.overage_agreed = False
     st.session_state.payment_complete = False
     st.session_state.stripe_url = None
     st.session_state.sig_data = None
-    # We leave 'processed_ids' alone so we don't re-process old payments
     
-    # Clear addresses (Set to empty string)
+    # Clear addresses
     addr_keys = ["to_name", "to_street", "to_city", "to_state", "to_zip", 
                  "from_name", "from_street", "from_city", "from_state", "from_zip"]
     for k in addr_keys:
@@ -54,7 +52,7 @@ def reset_app():
     st.rerun()
 
 def show_main_app():
-    # --- 0. SAFETY CHECK (Ensures keys exist) ---
+    # --- 0. SAFETY CHECK ---
     defaults = {
         "app_mode": "store",
         "audio_path": None,
@@ -68,8 +66,7 @@ def show_main_app():
         "selected_language": "English"
     }
     for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+        if k not in st.session_state: st.session_state[k] = v
 
     # --- 1. AUTO-DETECT RETURN FROM STRIPE ---
     qp = st.query_params
@@ -81,13 +78,15 @@ def show_main_app():
                 st.session_state.processed_ids.append(session_id)
                 st.toast("✅ Payment Confirmed!")
                 
-                # Restore State
                 st.session_state.app_mode = "workspace"
                 if "tier" in qp: st.session_state.locked_tier = qp["tier"]
                 
+                # Restore Language from URL if passed
+                if "lang" in qp: st.session_state.selected_language = qp["lang"]
+
                 # Restore Addresses
                 keys_to_restore = ["to_name", "to_street", "to_city", "to_state", "to_zip", 
-                                   "from_name", "from_street", "from_city", "from_state", "from_zip", "selected_language"]
+                                   "from_name", "from_street", "from_city", "from_state", "from_zip"]
                 for key in keys_to_restore:
                     if key in qp: st.session_state[key] = qp[key]
             else:
@@ -114,7 +113,14 @@ def show_main_app():
                 index=0, key="tier_select"
             )
         with c_lang:
-            language = st.selectbox("Language:", ["English", "Japanese", "Chinese"], key="lang_select")
+            # Pre-select based on user profile if available
+            default_idx = 0
+            user_lang = st.session_state.get("selected_language", "English")
+            options = ["English", "Japanese", "Chinese", "Korean"]
+            if user_lang in options:
+                default_idx = options.index(user_lang)
+                
+            language = st.selectbox("Language:", options, index=default_idx, key="lang_select")
         
         if "Standard" in service_tier: price = COST_STANDARD; tier_name = "Standard"
         elif "Heirloom" in service_tier: price = COST_HEIRLOOM; tier_name = "Heirloom"
@@ -124,7 +130,9 @@ def show_main_app():
         
         current_config = f"{service_tier}_{price}_{language}"
         if "stripe_url" not in st.session_state or st.session_state.get("last_config") != current_config:
-             success_link = f"{YOUR_APP_URL}?tier={tier_name}&selected_language={language}"
+             # Pass Language in URL
+             success_link = f"{YOUR_APP_URL}?tier={tier_name}&lang={language}"
+             
              user_email = st.session_state.get("user_email", "guest@verbapost.com")
              draft_id = database.save_draft(user_email, "", "", "", "", "")
              
@@ -148,6 +156,7 @@ def show_main_app():
     # ==================================================
     elif st.session_state.app_mode == "workspace":
         locked_tier = st.session_state.get("locked_tier", "Standard")
+        # Ensure language is set (either from URL or Session)
         locked_lang = st.session_state.get("selected_language", "English")
         
         is_civic = "Civic" in locked_tier
@@ -204,6 +213,7 @@ def show_main_app():
         
         audio_val = st.audio_input("Record")
         
+        # Gate
         valid_sender = st.session_state.get("from_name") and st.session_state.get("from_street")
         valid_recipient = st.session_state.get("to_name") and st.session_state.get("to_street")
         if is_civic and not valid_sender: st.warning("⚠️ Please click **'Save Addresses'** first."); st.stop()
@@ -215,6 +225,7 @@ def show_main_app():
                 with open(path, "wb") as f: f.write(audio_val.getvalue())
                 st.session_state.audio_path = path
                 try:
+                    # Pass Language to Transcriber if available
                     text = ai_engine.transcribe_audio(path)
                     st.session_state.transcribed_text = text
                     st.session_state.app_mode = "review"
@@ -273,6 +284,7 @@ def show_main_app():
                 for t in targets:
                     t_addr = t['address_obj']
                     t_lob = {'name': t['name'], 'address_line1': t_addr['street'], 'address_city': t_addr['city'], 'address_state': t_addr['state'], 'address_zip': t_addr['zip']}
+                    # Pass Language
                     pdf = letter_format.create_pdf(st.session_state.transcribed_text, f"{t['name']}\n{t_addr['street']}", f"{fr_n}\n{fr_s}...", False, locked_lang, f"{t['name']}.pdf", sig_path)
                     files.append(pdf)
                     mailer.send_letter(pdf, t_lob, addr_from)
@@ -306,7 +318,8 @@ def show_main_app():
 
             st.write("✅ Done!")
             if st.session_state.get("user"):
-                 database.update_user_address(st.session_state.user.user.email, fr_n, fr_s, fr_c, fr_st, fr_z)
+                 # Save Language preference along with address
+                 database.update_user_profile(st.session_state.user.user.email, fr_n, fr_s, fr_c, fr_st, fr_z, locked_lang)
 
         st.success("Sent!")
         if st.button("Start New"): reset_app()

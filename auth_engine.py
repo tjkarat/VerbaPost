@@ -9,68 +9,48 @@ except ImportError:
     LIB_AVAILABLE = False
 
 def get_supabase_client():
-    """
-    Connects to Supabase only when requested.
-    """
-    if not LIB_AVAILABLE:
-        return None, "Library 'supabase' not installed."
-
+    if not LIB_AVAILABLE: return None, "Library 'supabase' not installed."
     try:
-        # Use .get() to prevent KeyErrors if secrets are missing
         supabase_secrets = st.secrets.get("supabase", None)
-        
-        if not supabase_secrets:
-            return None, "Missing [supabase] section in Secrets."
-            
+        if not supabase_secrets: return None, "Missing [supabase] section."
         url = supabase_secrets.get("url")
-        key = supabase_secrets.get("key") # Anon key for login
-        
-        if not url or not key:
-            return None, "Missing 'url' or 'key' inside [supabase] secrets."
-            
+        key = supabase_secrets.get("key")
+        if not url or not key: return None, "Missing 'url' or 'key'."
         return create_client(url, key), None
-        
-    except Exception as e:
-        return None, f"Connection Error: {e}"
+    except Exception as e: return None, f"Connection Error: {e}"
 
-def sign_up(email, password, name, street, city, state, zip_code):
+# UPDATED: Accepts 'language'
+def sign_up(email, password, name, street, city, state, zip_code, language="English"):
     client, err = get_supabase_client()
     if err: return None, err
     
     try:
         response = client.auth.sign_up({"email": email, "password": password})
-        
-        # If successful, sync with our SQL database
         if response.user:
              try:
                  database.create_or_get_user(email)
-                 database.update_user_address(email, name, street, city, state, zip_code)
+                 # Save Language Preference
+                 database.update_user_profile(email, name, street, city, state, zip_code, language)
              except Exception as db_err:
                  print(f"DB Sync Error: {db_err}")
              return response, None
-        return None, "Signup failed (No user returned)"
+        return None, "Signup failed"
     except Exception as e:
         return None, str(e)
 
 def sign_in(email, password):
     client, err = get_supabase_client()
     if err: return None, err
-    
     try:
         response = client.auth.sign_in_with_password({"email": email, "password": password})
         if response.user:
-            # Ensure user exists in our SQL DB
-            try:
-                 database.create_or_get_user(email)
-            except:
-                 pass
+            try: database.create_or_get_user(email)
+            except: pass
             return response, None
         return None, "Login failed"
-    except Exception as e:
-        return None, str(e)
+    except Exception as e: return None, str(e)
 
 def get_current_address(email):
-    # Helper to get address from SQL DB
     try:
         user = database.get_user_by_email(email)
         if user:
@@ -79,8 +59,8 @@ def get_current_address(email):
                 "street": user.address_street or "",
                 "city": user.address_city or "",
                 "state": user.address_state or "",
-                "zip": user.address_zip or ""
+                "zip": user.address_zip or "",
+                "language": user.language or "English" # Load Language
             }
-    except Exception as e:
-        print(f"Address Load Error: {e}")
+    except: pass
     return {}

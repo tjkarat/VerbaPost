@@ -16,30 +16,27 @@ def show_login(handle_login, handle_signup):
 
         tab_login, tab_signup = st.tabs(["Log In", "Create Account"]) 
 
-        # --- LOGIN TAB ---
+        # --- LOGIN ---
         with tab_login:
             with st.form("login_form"):
                 email = st.text_input("Email")
                 password = st.text_input("Password", type="password")
-                
-                # Submit Button
                 if st.form_submit_button("Log In", type="primary", use_container_width=True):
                     with st.spinner("Verifying..."):
                         handle_login(email, password)
 
-        # --- SIGN UP TAB ---
+        # --- SIGN UP ---
         with tab_signup:
             with st.form("signup_form"):
                 st.caption("Create your secure account")
                 new_email = st.text_input("Email")
                 
-                # Double Password Validation
                 c_p1, c_p2 = st.columns(2)
                 new_pass = c_p1.text_input("Password", type="password")
                 confirm_pass = c_p2.text_input("Confirm Password", type="password")
 
                 st.markdown("---")
-                st.caption("Return Address (Autofill fix enabled)")
+                st.caption("Return Address")
                 
                 new_name = st.text_input("Full Name")
                 new_street = st.text_input("Street Address")
@@ -47,8 +44,12 @@ def show_login(handle_login, handle_signup):
                 new_city = c_a.text_input("City")
                 new_state = c_b.text_input("State", max_chars=2)
                 new_zip = st.text_input("Zip Code", max_chars=5)
+
+                # NEW: Language Selector
+                st.markdown("---")
+                st.caption("Formatting Preference")
+                new_lang = st.selectbox("Preferred Language (for fonts)", ["English", "Japanese", "Chinese", "Korean"])
                 
-                # Submit Button acts as the "Catch All" for data
                 if st.form_submit_button("Create Account", type="primary", use_container_width=True):
                     if new_pass != confirm_pass:
                         st.error("❌ Passwords do not match.")
@@ -56,7 +57,8 @@ def show_login(handle_login, handle_signup):
                         st.error("❌ Please fill all address fields.")
                     else:
                         with st.spinner("Creating account..."):
-                            handle_signup(new_email, new_pass, new_name, new_street, new_city, new_state, new_zip)
+                            # Pass language to handler
+                            handle_signup(new_email, new_pass, new_name, new_street, new_city, new_state, new_zip, new_lang)
         
         st.divider()
         if st.button("⬅️ Back to Home", type="secondary"):
