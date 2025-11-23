@@ -16,7 +16,8 @@ import mailer
 import zipcodes
 import payment_engine
 import civic_engine
-import promo_engine 
+import promo_engine
+import analytics
 
 # --- CONFIG ---
 MAX_BYTES_THRESHOLD = 35 * 1024 * 1024 
@@ -44,6 +45,9 @@ def reset_app():
     st.rerun()
 
 def show_main_app():
+    # --- 0. INJECT ANALYTICS ---
+    analytics.inject_ga()
+
     # --- 0. SAFETY CHECK ---
     defaults = {
         "app_mode": "store",

@@ -1,8 +1,12 @@
 import streamlit as st
 import auth_engine
 import time
+import analytics  # <--- 1. NEW IMPORT
 
 def show_login(handle_login, handle_signup): 
+    # --- 2. INJECT ANALYTICS ---
+    analytics.inject_ga() 
+
     c1, c2, c3 = st.columns([1, 2, 1])
     
     with c2:
