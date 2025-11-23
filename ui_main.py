@@ -7,6 +7,9 @@ import urllib.parse
 import io
 import zipfile
 import re
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # --- CONFIG ---
 MAX_BYTES_THRESHOLD = 35 * 1024 * 1024 
@@ -14,6 +17,7 @@ YOUR_APP_URL = "https://verbapost.streamlit.app"
 COST_STANDARD = 2.99
 COST_HEIRLOOM = 5.99
 COST_CIVIC = 6.99
+SUPPORT_EMAIL = "support@verbapost.com"
 
 def reset_app():
     # SOFT RESET
@@ -33,9 +37,33 @@ def reset_app():
     st.query_params.clear()
     st.rerun()
 
+def send_admin_alert(subject, body):
+    """Sends an email notification to support@verbapost.com if secrets are configured."""
+    # Check for email secrets
+    email_secrets = st.secrets.get("email")
+    if not email_secrets:
+        print(f"[Admin Alert (Log Only)] {subject}")
+        return
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = email_secrets["sender_email"]
+        msg['To'] = SUPPORT_EMAIL
+        msg['Subject'] = f"[VerbaPost Alert] {subject}"
+        msg.attach(MIMEText(body, 'plain'))
+
+        server = smtplib.SMTP(email_secrets["smtp_server"], email_secrets["smtp_port"])
+        server.starttls()
+        server.login(email_secrets["sender_email"], email_secrets["password"])
+        server.send_message(msg)
+        server.quit()
+        print(f"✅ Email alert sent to {SUPPORT_EMAIL}")
+    except Exception as e:
+        print(f"❌ Failed to send admin alert: {e}")
+
 def show_main_app():
     # -----------------------------------------------------------
-    # LAZY IMPORTS (Moved inside to fix Circular Import Error)
+    # LAZY IMPORTS (Moved inside to prevent Circular Import Error)
     # -----------------------------------------------------------
     import ai_engine 
     import database
@@ -359,6 +387,20 @@ def show_main_app():
                 else:
                      if "letter_id" in st.query_params:
                          database.update_letter_status(st.query_params["letter_id"], "Queued", st.session_state.transcribed_text)
+                     
+                     # --- SEND HEIRLOOM ALERT ---
+                     # Added email alert logic here as requested
+                     alert_subject = f"New Heirloom Letter from {fr_n}"
+                     alert_body = f"""A new Heirloom letter has been created.
+                     
+FROM: {fr_n}
+TO: {to_n}
+TIER: Heirloom
+STATUS: Queued
+
+Please log in to the admin console or check Supabase to fulfill this order.
+                     """
+                     send_admin_alert(alert_subject, alert_body)
 
                 with open(pdf, "rb") as f:
                     st.download_button("Download Copy", f, filename_pdf)
