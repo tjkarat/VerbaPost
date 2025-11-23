@@ -1,8 +1,12 @@
 import streamlit as st
-# REMOVED importlib to fix crash
+import importlib
+import ui_splash
 import auth_engine 
 import payment_engine
 import database
+
+# Force reload to catch text changes
+importlib.reload(ui_splash)
 
 # 1. INTERCEPT STRIPE RETURN
 qp = st.query_params
@@ -16,8 +20,13 @@ from ui_main import show_main_app
 from ui_login import show_login
 from ui_admin import show_admin
 
-# 3. CONFIG
-st.set_page_config(page_title="VerbaPost", page_icon="📮", layout="centered")
+# 3. CONFIG (SEO UPDATE)
+st.set_page_config(
+    page_title="VerbaPost | Send Mail to Inmates, Congress & Homeowners", # <--- KEYWORD RICH TITLE
+    page_icon="📮", 
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
 
 def inject_custom_css():
     st.markdown("""
@@ -88,7 +97,6 @@ elif st.session_state.current_view == "main_app":
             
             # ADMIN CHECK
             try:
-                # Check secrets for admin email
                 admin_email = st.secrets["admin"]["email"]
                 if st.session_state.user.user.email == admin_email: 
                     if st.button("🔐 Admin Panel", type="primary"):
