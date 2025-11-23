@@ -19,7 +19,6 @@ def get_supabase_client():
         return create_client(url, key), None
     except Exception as e: return None, f"Connection Error: {e}"
 
-# UPDATED: Accepts 'language'
 def sign_up(email, password, name, street, city, state, zip_code, language="English"):
     client, err = get_supabase_client()
     if err: return None, err
@@ -28,8 +27,9 @@ def sign_up(email, password, name, street, city, state, zip_code, language="Engl
         response = client.auth.sign_up({"email": email, "password": password})
         if response.user:
              try:
+                 # Ensure user row exists
                  database.create_or_get_user(email)
-                 # Save Language Preference
+                 # Update Profile with Language
                  database.update_user_profile(email, name, street, city, state, zip_code, language)
              except Exception as db_err:
                  print(f"DB Sync Error: {db_err}")
@@ -60,7 +60,7 @@ def get_current_address(email):
                 "city": user.address_city or "",
                 "state": user.address_state or "",
                 "zip": user.address_zip or "",
-                "language": user.language or "English" # Load Language
+                "language": user.language or "English"
             }
     except: pass
     return {}
