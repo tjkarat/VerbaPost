@@ -1,7 +1,12 @@
 import streamlit as st
+import importlib
+import ui_splash
 import auth_engine 
 import payment_engine
 import database
+
+# FORCE RELOAD of UI Modules to see changes instantly
+importlib.reload(ui_splash)
 
 # 1. INTERCEPT STRIPE RETURN
 qp = st.query_params
@@ -9,7 +14,7 @@ if "session_id" in qp:
     if "current_view" not in st.session_state:
         st.session_state.current_view = "main_app"
 
-# 2. IMPORTS
+# 2. IMPORTS (Post-Reload)
 from ui_splash import show_splash
 from ui_main import show_main_app
 from ui_login import show_login
@@ -65,7 +70,7 @@ def handle_signup(email, password, name, street, city, state, zip_code, language
         st.session_state.current_view = "main_app"
         st.rerun()
 
-# 5. STATE & ROUTER
+# 5. STATE
 if "current_view" not in st.session_state: st.session_state.current_view = "splash" 
 if "user" not in st.session_state: st.session_state.user = None
 
@@ -90,10 +95,4 @@ elif st.session_state.current_view == "main_app":
             if st.button("Log Out"):
                 for key in list(st.session_state.keys()): del st.session_state[key]
                 st.rerun()
-                
     show_main_app()
-
-# 6. GLOBAL FOOTER
-with st.sidebar:
-    st.divider()
-    st.markdown("📧 **Help:** support@verbapost.com")

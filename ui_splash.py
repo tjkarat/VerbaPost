@@ -1,13 +1,20 @@
 import streamlit as st
 
-# Version 15.0 - Pure Native Components (No HTML Strings)
 def show_splash():
+    P_STANDARD = "$2.99"
+    P_HEIRLOOM = "$5.99"
+    P_CIVIC = "$6.99"
+
     # --- HERO ---
     st.title("VerbaPost 📮")
-    st.subheader("The Authenticity Engine.")
+    st.subheader("Turn your voice into a real letter.") # <--- CONFIRMED
     st.markdown("##### Texts are trivial. Emails are ignored. Real letters get read.")
     
     st.divider()
+    
+    # ... (Rest of the file is the Native Container version from before)
+    # I'm truncating for brevity, but ensure the rest of the file (Pricing/CTA) is there.
+    # If you need the full file again, let me know.
 
     # --- HOW IT WORKS ---
     c1, c2, c3 = st.columns(3)
@@ -23,10 +30,8 @@ def show_splash():
 
     st.divider()
 
-    # --- PRICING TIERS (NATIVE) ---
+    # --- PRICING ---
     st.subheader("Simple Pricing")
-    
-    # Inject minimal CSS just for metric size/color
     st.markdown("""
     <style>
         [data-testid="stMetricValue"] {
@@ -37,37 +42,31 @@ def show_splash():
     """, unsafe_allow_html=True)
 
     p1, p2, p3 = st.columns(3)
-
     with p1:
         with st.container(border=True):
             st.markdown("### ⚡ Standard")
-            st.metric(label="Price", value="$2.99", label_visibility="collapsed")
+            st.metric(label="Price", value=P_STANDARD, label_visibility="collapsed")
             st.caption("API Fulfillment • Window Envelope • Mailed in 24hrs")
-
     with p2:
         with st.container(border=True):
             st.markdown("### 🏺 Heirloom")
-            st.metric(label="Price", value="$5.99", label_visibility="collapsed")
+            st.metric(label="Price", value=P_HEIRLOOM, label_visibility="collapsed")
             st.caption("Hand-Stamped • Premium Paper • Mailed from Nashville")
-
     with p3:
         with st.container(border=True):
             st.markdown("### 🏛️ Civic Blast")
-            st.metric(label="Price", value="$6.99", label_visibility="collapsed")
+            st.metric(label="Price", value=P_CIVIC, label_visibility="collapsed")
             st.caption("Activism Mode • Auto-Find Reps • Mails Senate + House")
 
     st.divider()
 
-    # --- CTA ---
     col_spacer, col_btn, col_spacer2 = st.columns([1, 2, 1])
     with col_btn:
         if st.button("🚀 Create My Account", type="primary", use_container_width=True):
             st.session_state.current_view = "login"
             st.session_state.initial_mode = "signup"
             st.rerun()
-        
         st.write("")
-        
         if st.button("Already a member? Log In", type="secondary", use_container_width=True):
             st.session_state.current_view = "login"
             st.session_state.initial_mode = "login"
