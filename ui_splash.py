@@ -1,6 +1,5 @@
 import streamlit as st
-import analytics  # <-- Import the new file
-import promo_engine # <-- Import for the hidden admin tool
+import analytics
 
 def show_splash():
     # 1. INJECT ANALYTICS
@@ -33,26 +32,28 @@ def show_splash():
 
     st.divider()
     
-    # --- USE CASES (Refined Layout) ---
+    # --- USE CASES (REORDERED) ---
     st.subheader("Why VerbaPost?")
     
     u1, u2, u3 = st.columns(3)
     
+    # LEFT: Realtors
     with u1:
-        with st.container(border=True):
-            st.write("**🧡 Families & Inmates**")
-            # UPDATED: Concise text, removed "Mail Photos" implication
-            st.caption("Direct prison delivery. Facility compliant. No stamps required.")
-
-    with u2:
         with st.container(border=True):
             st.write("**🏡 Realtors & Sales**")
             st.caption("Handwritten direct mail. High open rates. Instant follow-up.")
 
-    with u3:
+    # MIDDLE: Civic
+    with u2:
         with st.container(border=True):
             st.write("**🗳️ Civic Activists**")
             st.caption("Write to Congress. Physical petitions get noticed.")
+
+    # RIGHT: Families
+    with u3:
+        with st.container(border=True):
+            st.write("**🧡 Families & Inmates**")
+            st.caption("Direct prison delivery. Facility compliant. No stamps required.")
 
     st.divider()
 
@@ -101,7 +102,7 @@ def show_splash():
             st.session_state.initial_mode = "login"
             st.rerun()
 
-    # --- LEGAL FOOTER & HIDDEN ADMIN ---
+    # --- LEGAL FOOTER ---
     st.markdown("---")
     f1, f2, f3 = st.columns([1, 2, 1])
     with f2:
@@ -109,10 +110,3 @@ def show_splash():
         if st.button("⚖️ Privacy Policy & Terms of Service", type="secondary", use_container_width=True):
             st.session_state.current_view = "legal"
             st.rerun()
-    
-    # HIDDEN ADMIN TOOL: Only appears if you type "?admin=true" in URL or just uncomment for now
-    # For simplicity, let's put it inside a collapsed expander that only you know about
-    with st.expander("Admin", expanded=False):
-        if st.button("Generate Single-Use Promo"):
-            code = promo_engine.generate_code()
-            st.success(f"New Code: {code}")

@@ -16,7 +16,7 @@ import mailer
 import zipcodes
 import payment_engine
 import civic_engine
-import promo_engine  # <--- NEW IMPORT
+import promo_engine 
 
 # --- CONFIG ---
 MAX_BYTES_THRESHOLD = 35 * 1024 * 1024 
@@ -24,26 +24,17 @@ YOUR_APP_URL = "https://verbapost.streamlit.app"
 COST_STANDARD = 2.99
 COST_HEIRLOOM = 5.99
 COST_CIVIC = 6.99
-COST_OVERAGE = 1.00
-
-def validate_zip(zipcode, state):
-    if not zipcodes.is_real(zipcode): return False, "Invalid Zip Code"
-    details = zipcodes.matching(zipcode)
-    if details and details[0]['state'] != state.upper():
-         return False, f"Zip is in {details[0]['state']}, not {state}"
-    return True, "Valid"
 
 def reset_app():
     # SOFT RESET
     st.session_state.app_mode = "store"
     st.session_state.audio_path = None
     st.session_state.transcribed_text = ""
-    st.session_state.overage_agreed = False
     st.session_state.payment_complete = False
     st.session_state.stripe_url = None
     st.session_state.sig_data = None
     
-    # Clear addresses
+    # Clear addresses (keep email/user)
     addr_keys = ["to_name", "to_street", "to_city", "to_state", "to_zip", 
                  "from_name", "from_street", "from_city", "from_state", "from_zip"]
     for k in addr_keys:
@@ -58,7 +49,6 @@ def show_main_app():
         "app_mode": "store",
         "audio_path": None,
         "transcribed_text": "",
-        "overage_agreed": False,
         "payment_complete": False,
         "processed_ids": [],
         "stripe_url": None,
@@ -83,21 +73,45 @@ def show_main_app():
                 if "tier" in qp: st.session_state.locked_tier = qp["tier"]
                 if "lang" in qp: st.session_state.selected_language = qp["lang"]
                 
-                # Restore Addresses
+                # Restore Addresses if present
                 keys_to_restore = ["to_name", "to_street", "to_city", "to_state", "to_zip", 
                                    "from_name", "from_street", "from_city", "from_state", "from_zip"]
                 for key in keys_to_restore:
                     if key in qp: st.session_state[key] = qp[key]
             else:
                 st.error("Payment verification failed.")
-            
         st.query_params.clear() 
 
-    # --- SIDEBAR ---
+    # ==========================================
+    #  SIDEBAR (CONTROLS & ADMIN)
+    # ==========================================
     with st.sidebar:
         st.subheader("Controls")
         if st.button("🔄 Cancel & Restart", type="primary"):
             reset_app()
+
+        # --- ADMIN SECTION (HIDDEN) ---
+        # Get current user email safely
+        current_email = ""
+        if st.session_state.get("user"):
+            current_email = st.session_state.user.user.email
+        
+        # Check against secrets
+        admin_email = st.secrets.get("admin", {}).get("email", "")
+
+        if current_email and current_email == admin_email:
+            st.divider()
+            with st.expander("🔐 Admin Console"):
+                st.write("**Promo Codes**")
+                if st.button("Generate Single-Use Code"):
+                    code = promo_engine.generate_code()
+                    st.success(f"Code: `{code}`")
+                    st.info("Copy this code now.")
+                
+                st.divider()
+                st.write("**Active Codes:**")
+                # Optional: display active codes for admin
+                # st.json(promo_engine._load_promos())
 
     # ==================================================
     #  PHASE 1: THE STORE
@@ -118,7 +132,7 @@ def show_main_app():
             if user_lang in options: default_idx = options.index(user_lang)
             language = st.selectbox("Language:", options, index=default_idx, key="lang_select")
         
-        # Calculate Price
+        # Determine Price & Tier Name
         if "Standard" in service_tier: price = COST_STANDARD; tier_name = "Standard"
         elif "Heirloom" in service_tier: price = COST_HEIRLOOM; tier_name = "Heirloom"
         elif "Civic" in service_tier: price = COST_CIVIC; tier_name = "Civic"
@@ -134,14 +148,12 @@ def show_main_app():
                 st.success("✅ Promo Code Applied! Total: $0.00")
             else:
                 st.error("❌ Invalid or Expired Code")
-        # ------------------------
 
         st.info(f"**Total: ${price}**")
         
-        # Logic Fork: Free (Promo) vs Paid (Stripe)
+        # Logic Fork
         if valid_promo:
             if st.button("🚀 Start (Free)", type="primary"):
-                # Burn the code
                 if promo_engine.redeem_code(promo_code):
                     st.session_state.payment_complete = True
                     st.session_state.app_mode = "workspace"
@@ -150,8 +162,7 @@ def show_main_app():
                     st.toast("Code Redeemed! Starting...")
                     st.rerun()
                 else:
-                    st.error("Error redeeming code. Please try again.")
-
+                    st.error("Error redeeming code.")
         else:
             # ORIGINAL STRIPE FLOW
             current_config = f"{service_tier}_{price}_{language}"
@@ -172,8 +183,6 @@ def show_main_app():
             if st.session_state.stripe_url:
                 st.warning("⚠️ **Note:** Payment opens in a **New Tab**. You will return here automatically.")
                 st.link_button(f"💳 Pay ${price} & Start", st.session_state.stripe_url, type="primary")
-            else:
-                st.error("System Error: Payment link failed.")
 
     # ==================================================
     #  PHASE 2: THE WORKSPACE
@@ -186,7 +195,7 @@ def show_main_app():
 
         st.success(f"🔓 **{locked_tier}** Unlocked ({locked_lang})")
 
-        # Addressing
+        # Addressing Form
         st.subheader("1. Addressing")
         with st.form("address_form"):
             col_to, col_from = st.tabs(["👉 Recipient", "👈 Sender"])
@@ -212,32 +221,28 @@ def show_main_app():
                 from_state = c3.text_input("Your State", value=get_val("from_state"))
                 from_zip = c4.text_input("Your Zip", value=get_val("from_zip"))
             
-            save_btn = st.form_submit_button("💾 Save Addresses")
+            if st.form_submit_button("💾 Save Addresses"):
+                st.session_state.to_name = to_name; st.session_state.to_street = to_street
+                st.session_state.to_city = to_city; st.session_state.to_state = to_state
+                st.session_state.to_zip = to_zip; st.session_state.from_name = from_name
+                st.session_state.from_street = from_street; st.session_state.from_city = from_city
+                st.session_state.from_state = from_state; st.session_state.from_zip = from_zip
+                st.toast("Addresses Saved!")
 
-        if save_btn:
-            st.session_state.to_name = to_name; st.session_state.to_street = to_street
-            st.session_state.to_city = to_city; st.session_state.to_state = to_state
-            st.session_state.to_zip = to_zip; st.session_state.from_name = from_name
-            st.session_state.from_street = from_street; st.session_state.from_city = from_city
-            st.session_state.from_state = from_state; st.session_state.from_zip = from_zip
-            st.toast("Addresses Saved!")
-
-        # Sign
+        # Signature Canvas
         st.divider()
         st.subheader("2. Sign")
         canvas_result = st_canvas(fill_color="rgba(255, 165, 0, 0.3)", stroke_width=2, stroke_color="#000", background_color="#fff", height=200, width=350, drawing_mode="freedraw", key="sig")
         if canvas_result.image_data is not None: st.session_state.sig_data = canvas_result.image_data
 
-        # Dictate
+        # Dictation
         st.divider()
         st.subheader("3. Dictate")
-        
-        # --- RESTORED INSTRUCTIONS ---
-        st.info("👇 **How to Record:**\n1. Tap the **Microphone Icon** below.\n2. Speak your message.\n3. Tap the **Red Square** to stop.")
+        st.info("👇 **How to Record:**\n1. Tap the **Microphone Icon**.\n2. Speak.\n3. Tap **Red Square** to stop.")
         
         audio_val = st.audio_input("Record")
         
-        # Gate
+        # Gates
         valid_sender = st.session_state.get("from_name") and st.session_state.get("from_street")
         valid_recipient = st.session_state.get("to_name") and st.session_state.get("to_street")
         if is_civic and not valid_sender: st.warning("⚠️ Please click **'Save Addresses'** first."); st.stop()
