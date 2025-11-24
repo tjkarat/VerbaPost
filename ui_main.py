@@ -10,6 +10,7 @@ import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from supabase import create_client, Client # Added for Auth
 
 # --- CONFIG ---
 MAX_BYTES_THRESHOLD = 35 * 1024 * 1024 
@@ -18,6 +19,16 @@ COST_STANDARD = 2.99
 COST_HEIRLOOM = 5.99
 COST_CIVIC = 6.99
 SUPPORT_EMAIL = "support@verbapost.com"
+
+# --- HELPER: INIT SUPABASE ---
+@st.cache_resource
+def get_supabase():
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+        return create_client(url, key)
+    except Exception:
+        return None
 
 def reset_app():
     # SOFT RESET
@@ -39,7 +50,6 @@ def reset_app():
 
 def send_admin_alert(subject, body):
     """Sends an email notification to support@verbapost.com if secrets are configured."""
-    # Check for email secrets
     email_secrets = st.secrets.get("email")
     if not email_secrets:
         print(f"[Admin Alert (Log Only)] {subject}")
@@ -61,9 +71,44 @@ def send_admin_alert(subject, body):
     except Exception as e:
         print(f"❌ Failed to send admin alert: {e}")
 
+# --- NEW: PASSWORD RESET SCREEN ---
+def render_password_reset_page():
+    st.header("🔐 Update Your Password")
+    st.info("You have successfully clicked the reset link. Please create a new password below.")
+    
+    supabase = get_supabase()
+    
+    with st.form("reset_pwd_form"):
+        new_pass = st.text_input("New Password", type="password")
+        confirm_pass = st.text_input("Confirm New Password", type="password")
+        submit = st.form_submit_button("Update Password")
+        
+        if submit:
+            if new_pass != confirm_pass:
+                st.error("Passwords do not match.")
+            elif len(new_pass) < 6:
+                st.error("Password must be at least 6 characters.")
+            else:
+                try:
+                    # Supabase automatically logs them in via the link, 
+                    # so we just update the user for the current session.
+                    supabase.auth.update_user({"password": new_pass})
+                    st.success("✅ Password updated successfully!")
+                    st.balloons()
+                    
+                    # Clear the query params so they don't get stuck on this page on refresh
+                    st.query_params.clear()
+                    
+                    st.write("Redirecting to Workspace...")
+                    import time
+                    time.sleep(2)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error updating password: {e}")
+
 def show_main_app():
     # -----------------------------------------------------------
-    # LAZY IMPORTS (Moved inside to prevent Circular Import Error)
+    # LAZY IMPORTS 
     # -----------------------------------------------------------
     import ai_engine 
     import database
@@ -78,6 +123,15 @@ def show_main_app():
 
     # --- 0. INJECT ANALYTICS ---
     analytics.inject_ga()
+
+    # ==========================================================
+    #  CRITICAL: CHECK FOR PASSWORD RECOVERY MODE
+    # ==========================================================
+    # Supabase adds '?type=recovery' to the URL when clicking the email link
+    if st.query_params.get("type") == "recovery":
+        render_password_reset_page()
+        return  # <--- STOP EXECUTION HERE so the store doesn't load
+    # ==========================================================
 
     # --- 0. SAFETY CHECK ---
     defaults = {
